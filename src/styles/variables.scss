@@ -1,0 +1,235 @@
+// Colors
+$color-white: #ffffff;
+$color-black: #000000;
+$color-dark-bg: #0a0a0f;
+$color-dark-blue: #1a1a2e;
+$color-orange: #ff6b35;
+$color-orange-light: #ff8c5a;
+$color-pink: #ff006e;
+$color-cyan: #00d9ff;
+$color-blue: #0066ff;
+$color-blue-light: #577FCF;
+$color-green: #06CC1A;
+$color-red: #ff0033;
+$color-gray: #666;
+$color-gray-light: #999;
+$color-gray-dark: #333;
+
+// Border Colors
+$box-border-color: #ffffff;
+
+// Gradients
+$gradient-wave-1: linear-gradient(135deg, #ff6b35 0%, #ff006e 50%, #0066ff 100%);
+$gradient-wave-2: linear-gradient(90deg, #ffd700 0%, #ff6b35 25%, #0066ff 75%, #00d9ff 100%);
+$gradient-bg: radial-gradient(ellipse at top right, rgba(255, 107, 53, 0.1) 0%, transparent 50%),
+              radial-gradient(ellipse at bottom left, rgba(0, 102, 255, 0.1) 0%, transparent 50%);
+
+// Typography
+$font-family-primary: 'Hurme Geometric Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+$font-family-title: 'Helvetica Neue', Arial, sans-serif;
+
+$font-size-sm: 20px;
+$font-size-md: 30px;
+$font-size-lg: 40px;
+$font-size-xl: 50px;
+$font-size-label: 25px;
+
+$line-height-sm: 24px;
+$line-height-md: 40px;
+$line-height-lg: 53px;
+$line-height-label: 33px;
+
+$font-weight-light: 200;
+$font-weight-normal: 300;
+$font-weight-semibold: 400;
+$font-weight-bold: 600;
+
+// Spacing
+$spacing-xs: 10px;
+$spacing-sm: 20px;
+$spacing-md: 30px;
+$spacing-lg: 40px;
+$spacing-xl: 50px;
+$spacing-2xl: 60px;
+$spacing-3xl: 70px;
+
+// Border radius
+$border-radius-sm: 4px;
+$border-radius-md: 8px;
+$border-radius-lg: 16px;
+$border-radius-xl: 24px;
+$border-radius-full: 9999px;
+
+// Box styling
+$box-border-width: 3px;
+$box-border-radius: 39px;
+$box-padding-vertical: 20px;
+$box-padding-horizontal: 28px;
+
+// Button styling
+$button-height: 62px;
+$button-border-width: 2px;
+
+// Transitions
+$transition-fast: 150ms ease;
+$transition-normal: 250ms ease;
+$transition-slow: 350ms ease;
+
+// Shadows
+$shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+$shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+$shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+$shadow-glow-white: 0 0 20px rgba(255, 255, 255, 0.5);
+$shadow-glow-orange: 0 0 20px rgba(255, 107, 53, 0.6);
+$shadow-glow-green: 0 0 20px rgba(0, 255, 136, 0.6);
+
+// Layout
+$screen-width: 1080px;
+$screen-height: 1920px;
+$aspect-ratio: calc(9 / 16);
+
+// Screen container base styles
+@mixin screen-container {
+  position: relative;
+  width: $screen-width;
+  height: $screen-height;
+  margin: 0 auto;
+  background: #000;
+  overflow: hidden;
+}
+
+// Box container styling
+@mixin box-container {
+  border: $box-border-width solid $box-border-color;
+  border-radius: $box-border-radius;
+  background: transparent;
+  padding: $box-padding-vertical $box-padding-horizontal;
+}
+
+// Button shadow effect (white gradient on left side)
+@mixin button-shadow-effect {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -35%;
+    width: 80%;
+    height: 150%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.7) 0%, transparent 100%);
+    transform: rotate(-50deg);
+    pointer-events: none;
+  }
+}
+
+// Z-index
+$z-index-base: 1;
+$z-index-dropdown: 10;
+$z-index-modal: 100;
+$z-index-overlay: 90;
+$z-index-toast: 110;
+
+// Mixins
+@mixin laser-text {
+  font-family: 'Hurme Geometric Sans 3', $font-family-primary;
+  width: 160px;
+  height: 80px;
+  text-align: right;
+  font-size: 60px;
+  font-weight: 300;
+  line-height: 80px;
+  letter-spacing: 0px;
+  color: #FFFFFF;
+  margin-top: -114px;
+  margin-right: -5px;
+}
+
+// Button base styles - common properties for all buttons
+@mixin button-base {
+  position: relative;
+  padding: 0;
+  font-family: $font-family-primary;
+  background: transparent;
+  cursor: pointer;
+  transition: all $transition-normal;
+  overflow: hidden;
+  border-radius: 50px;
+  // Fix touch feedback on touchscreen
+  -webkit-tap-highlight-color: transparent;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+// Rounded button with border (primary style)
+@mixin button-rounded($border-width: 3px, $border-color: $color-white, $text-color: $color-white) {
+  @include button-base;
+  border: $border-width solid $border-color;
+  color: $text-color;
+  
+  &:hover {
+    background: rgba($border-color, 0.1);
+    box-shadow: 0 0 20px rgba($border-color, 0.3);
+  }
+}
+
+// Circular mode button (for treatment modes)
+@mixin button-circular($size: 115px, $border-width: 3px) {
+  @include button-base;
+  width: $size;
+  height: $size;
+  border: $border-width solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  color: $color-white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  line-height: 1.2;
+  -webkit-tap-highlight-color: transparent;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+  
+  &--active {
+    border: $border-width solid $box-border-color;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      height: 60%;
+      background: radial-gradient(ellipse at bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.2) 40%, transparent 80%);
+      pointer-events: none;
+      z-index: 0;
+      border-radius: 50%;
+      clip-path: circle(50% at center);
+    }
+    
+    span {
+      position: relative;
+      z-index: 1;
+    }
+  }
+}
+
+// Interactive element - for clickable items that scale on hover
+@mixin interactive-element {
+  cursor: pointer;
+  transition: transform $transition-fast;
+  -webkit-tap-highlight-color: transparent;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}

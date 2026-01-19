@@ -1,0 +1,137 @@
+{
+  "common": {
+    "back": "VISSZA",
+    "start": "Indítás",
+    "login": "Bejelentkezés",
+    "logout": "Kijelentkezés",
+    "yes": "IGEN",
+    "no": "NEM",
+    "ok": "OK",
+    "cancel": "Mégse",
+    "close": "Bezár"
+  },
+  "start": {
+    "title": "ULTIMA",
+    "subtitle": "LASER",
+    "getStarted": "Kezdjük"
+  },
+  "login": {
+    "title": "ULTIMA",
+    "subtitle": "LASER",
+    "description": "Kérjük, jelentkezzen be ULTIMA Academy fiókjával.",
+    "email": "E-mail cím",
+    "password": "Jelszó",
+    "loginButton": "Bejelentkezés"
+  },
+  "settings": {
+    "title": "BEÁLLÍTÁSOK",
+    "calibration": {
+      "title": "KALIBRÁLÁS",
+      "laserPower": "LÉZER TELJESÍTMÉNY",
+      "opticalScan": "OPTIKAI SZKENNELÉS",
+      "temperature": "Hőmérséklet"
+    },
+    "skinType": {
+      "title": "Fitzpatrick Bőrtípus",
+      "type1": "I.",
+      "type2": "II.",
+      "type3": "III.",
+      "type4": "IV.",
+      "type5": "V.",
+      "type6": "VI."
+    },
+    "hairColor": {
+      "title": "Szőrszín",
+      "greyWhite": "Szürke/Fehér",
+      "red": "Vörös",
+      "blonde": "Szőke",
+      "brown": "Barna",
+      "darkBrown": "Sötétbarna",
+      "black": "Fekete"
+    },
+    "hairType": {
+      "title": "Szőrtípus",
+      "thin": "Vékony",
+      "medium": "Közepes",
+      "thick": "Vastag"
+    },
+    "laserModuleTemp": "LÉZER MODUL HŐMÉRSÉKLET"
+  },
+  "laserTreatment": {
+    "title": "Lézer Kezelés",
+    "fpSkinType": "FP bőrtípus",
+    "hairColor": "Szőrszín",
+    "hairType": "Szőrtípus",
+    "outputPerformance": {
+      "title": "Kimeneti Teljesítmény",
+      "nm808": "808 nm",
+      "nm980": "980 nm",
+      "nm1064": "1064 nm",
+      "pulseWidth": "P.SZÉLESSÉG",
+      "totalOutputPower": "Teljes Kimeneti Teljesítmény"
+    },
+    "treatmentMode": {
+      "title": "Kezelési Mód",
+      "auto": "Auto",
+      "semiAuto": "Fél Auto",
+      "manual": "Kézi"
+    },
+    "laserModuleTemp": "LÉZER MODUL HŐMÉRSÉKLET",
+    "standby": "Készenléti",
+    "ready": "KÉSZ",
+    "vacuumLock": "VÁKUUM ZÁRÁS",
+    "target": "CÉL",
+    "targetedFollicles": "CÉLZOTT TÜSZŐK",
+    "status": {
+      "ok": "OK",
+      "no": "NEM"
+    }
+  },
+  "systemInfo": {
+    "title": "RENDSZER INFORMÁCIÓ",
+    "userDetails": {
+      "title": "FELHASZNÁLÓ ADATOK",
+      "name": "Név",
+      "role": "Szerepkör",
+      "expiration": "Lejárati idő"
+    },
+    "settings": {
+      "title": "BEÁLLÍTÁSOK",
+      "language": "Nyelv",
+      "wifiNetwork": "Wifi hálózat",
+      "bluetooth": "Bluetooth"
+    },
+    "hardwareDetails": {
+      "title": "HARDVER RÉSZLETEK",
+      "efLaserSerial": "EF-LASER sorozatszám",
+      "pcSerial": "PC sorozatszám"
+    },
+    "softwareDetails": {
+      "title": "SZOFTVER RÉSZLETEK",
+      "firmwareVersion": "Firmware verzió",
+      "guiVersion": "GUI verzió",
+      "guiVersionCheck": "GUI verzió ellenőrzés"
+    }
+  },
+  "guiUpdate": {
+    "modal": {
+      "title": "GUI VERZIÓ",
+      "message": "ÚJ GUI FRISSÍTÉS ELÉRHETŐ: V1.10.16. SZERETNÉ LETÖLTENI?",
+      "upToDate": "Minden rendben. Ez a legújabb GUI verzió."
+    },
+    "loading": {
+      "title": "ULTIMA",
+      "subtitle": "LASER",
+      "message": "ÚJ GUI BETÖLTÉSE..."
+    }
+  },
+  "error": {
+    "title": "Hiba",
+    "connectionLost": "Kapcsolat Megszakadt",
+    "connectionLostMessage": "Nem sikerült kommunikálni a hardver háttérrel.",
+    "authFailed": "Hitelesítés Sikertelen",
+    "authFailedMessage": "Érvénytelen e-mail vagy jelszó.",
+    "commandFailed": "Parancs Sikertelen",
+    "commandFailedMessage": "Nem sikerült parancsot küldeni a hardvernek."
+  }
+}

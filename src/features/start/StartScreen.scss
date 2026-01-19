@@ -1,0 +1,71 @@
+@import '@/styles/variables.scss';
+
+.start-screen {
+  @include screen-container;
+
+  &__background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1244px;
+    height: 2097px;
+    background-image: url('/assets/Background.png');
+    background-size: 1244px 2097px;
+    background-position: top left;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }
+
+  &__content {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    margin: 0 auto;
+    z-index: 1;
+    animation: fadeIn 1s ease;
+  }
+
+  &__logo {
+    position: absolute;
+    top: 249px;
+    left: 204px;
+    width: 673px;
+    height: 787px;
+  }
+
+  &__logo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  &__text {
+    position: absolute;
+    top: 1252px;
+    left: 204px;
+    width: 673px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  &__text-image {
+    width: 673px;
+    height: 252px;
+    object-fit: contain;
+  }
+
+  &__laser {
+    @include laser-text;
+  }
+
+  &__button {
+    @include button-rounded(6px, $color-white, $color-white);
+    @include button-shadow-effect;
+    align-self: center;
+    padding: 14px 118px;
+    font-size: 22px;
+    font-weight: $font-weight-normal;
+    letter-spacing: 0.5px;
+  }
+}

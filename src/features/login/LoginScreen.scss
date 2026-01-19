@@ -1,0 +1,125 @@
+@import '@/styles/variables.scss';
+
+.login-screen {
+  @include screen-container;
+
+  &__background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1244px;
+    height: 2097px;
+    background: transparent url('/assets/Background-2.png') 0% 0% no-repeat padding-box;
+    opacity: 1;
+    z-index: 0;
+  }
+
+  &__content {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    margin: 0 auto;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: fadeIn 1s ease;
+  }
+
+  &__text {
+    position: relative;
+    margin-top: 320px;
+    width: 673px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  &__text-image {
+    width: 673px;
+    height: 252px;
+    object-fit: contain;
+  }
+
+  &__laser {
+    @include laser-text;
+  }
+
+  &__description {
+    // margin-top: 60px;
+    text-align: center;
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 35px;
+    letter-spacing: 0px;
+    color: #FFFFFF;
+    opacity: 1;
+  }
+
+  &__form {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+  }
+
+  &__input-group {
+    position: relative;
+    width: 532px;
+  }
+
+  &__input {
+    width: 532px;
+    height: 62px;
+    padding: 0 30px;
+    background: transparent;
+    box-shadow: 0px 1px 1px #1C77FF54;
+    border: 5px solid #FA7E4E;
+    border-radius: 50px;
+    color: $color-white;
+    font-size: 18px;
+    outline: none;
+    transition: all $transition-normal;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    &:focus {
+      border-color: #FA7E4E;
+      box-shadow: 0px 1px 1px #1C77FF54, 0 0 15px rgba(250, 126, 78, 0.3);
+    }
+  }
+
+  &__password-toggle {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: $color-white;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity $transition-normal;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  &__button {
+    @include button-rounded(5px, #FFFFFF, #FFFFFF);
+    @include button-shadow-effect;
+    margin-top: 60px;
+    width: 532px;
+    height: 62px;
+    font-size: 18px;
+    font-weight: $font-weight-normal;
+  }
+}

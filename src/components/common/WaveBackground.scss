@@ -1,0 +1,72 @@
+@import '@/styles/variables.scss';
+
+.wave-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+
+  &__gradient {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: $gradient-bg;
+  }
+
+  &__wave {
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    opacity: 0.6;
+
+    &--1 {
+      bottom: -50%;
+      left: -50%;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(255, 107, 53, 0.3) 0%,
+        rgba(255, 0, 110, 0.2) 25%,
+        rgba(0, 102, 255, 0.2) 50%,
+        transparent 70%
+      );
+      animation: wave1 20s ease-in-out infinite;
+    }
+
+    &--2 {
+      bottom: -60%;
+      right: -50%;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(0, 217, 255, 0.3) 0%,
+        rgba(0, 102, 255, 0.2) 25%,
+        rgba(255, 107, 53, 0.2) 50%,
+        transparent 70%
+      );
+      animation: wave2 25s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes wave1 {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(5%, 5%) rotate(5deg);
+  }
+}
+
+@keyframes wave2 {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-5%, 5%) rotate(-5deg);
+  }
+}
