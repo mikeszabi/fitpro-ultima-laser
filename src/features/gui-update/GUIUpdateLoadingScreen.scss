@@ -4,16 +4,7 @@
   @include screen-container;
 
   &__background {
-    position: absolute;
-    top: 0px;
-    left: 0px;
-    width: 1244px;
-    height: 2097px;
-    background-image: url('/assets/Background-4.png');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    z-index: 0;
+    @include ultima-background(50% center);
   }
 
   &__content {

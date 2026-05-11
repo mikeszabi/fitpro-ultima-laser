@@ -16,15 +16,15 @@
 
 .gui-update-modal {
   background: rgba(0, 0, 0, 0.8);
-  border: 5px solid $box-border-color;
-  border-radius: $border-radius-xl;
-  padding: $box-padding-vertical $box-padding-horizontal;
+  border: 3px solid $box-border-color;
+  border-radius: 18px;
+  padding: 30px 34px;
   width: 724px;
   height: 329px;
   animation: slideInUp $transition-normal;
 
   &__title {
-    font-size: $font-size-xl;
+    font-size: 40px;
     font-weight: $font-weight-normal;
     line-height: $line-height-lg;
     text-align: center;
@@ -33,7 +33,7 @@
 
   &__divider {
     width: 156px;
-    height: 4px;
+    height: 3px;
     background: $color-white;
     margin: 0 auto $spacing-lg auto;
   }
@@ -53,7 +53,7 @@
 
   &__button {
     @include button-rounded($box-border-width, $color-white, $color-white);
-    @include button-shadow-effect;
+    @include glass-button-shine;
     width: 315px;
     height: 70px;
     font-size: $font-size-sm;

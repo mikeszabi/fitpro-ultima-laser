@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppDispatch, useAppSelector } from './store/hooks'
 // import { startHeartbeat } from './store/slices/systemSlice'
 import StartScreen from './features/start/StartScreen'
@@ -16,11 +16,26 @@ function App() {
   const currentScreen = useAppSelector((state) => state.ui.currentScreen)
   const showGUIUpdateModal = useAppSelector((state) => state.ui.showGUIUpdateModal)
   const showGUIUpdateLoading = useAppSelector((state) => state.ui.showGUIUpdateLoading)
+  const [viewportScale, setViewportScale] = useState(1)
 
   useEffect(() => {
     // Start heartbeat monitoring
     // dispatch(startHeartbeat())
   }, [dispatch])
+
+  useEffect(() => {
+    const updateViewportScale = () => {
+      const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920)
+      setViewportScale(scale)
+    }
+
+    updateViewportScale()
+    window.addEventListener('resize', updateViewportScale)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportScale)
+    }
+  }, [])
 
   const renderScreen = () => {
     if (showGUIUpdateLoading) {
@@ -45,9 +60,14 @@ function App() {
 
   return (
     <div className="app">
-      {renderScreen()}
-      {showGUIUpdateModal && <GUIUpdateModal />}
-      <ErrorModal />
+      <div
+        className="app__viewport"
+        style={{ transform: `scale(${viewportScale})` }}
+      >
+        {renderScreen()}
+        {showGUIUpdateModal && <GUIUpdateModal />}
+        <ErrorModal />
+      </div>
     </div>
   )
 }

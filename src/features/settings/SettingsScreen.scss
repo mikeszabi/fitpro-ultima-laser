@@ -4,118 +4,91 @@
   @include screen-container;
 
   &__background {
-    position: absolute;
-    top: 0;
-    left: -33px;
-    width: 1244px;
-    height: 2097px;
-    background: transparent url('/assets/Background-1.png') 0% 0% no-repeat padding-box;
-    opacity: 1;
-    z-index: 0;
+    @include ultima-background(50% center);
   }
 
   &__content {
     position: relative;
-    width: 1080px;
+    z-index: 1;
+    width: 954px;
     height: 1920px;
     margin: 0 auto;
-    z-index: 1;
+    padding-top: 120px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 80px;
   }
 
-  // Calibration Section
-  &__calibration {
-    position: relative;
-    @include box-container;
+  &__content--settings {
+    padding-top: 120px;
+  }
+
+  &__calibration,
+  &__section,
+  &__optical-section {
     width: 954px;
-    height: 536px;
+    border: 3px solid $color-white;
+    border-radius: 39px;
+    background: rgba(0, 0, 0, 0.46);
+  }
+
+  &__calibration {
+    min-height: 536px;
+    padding: 38px 46px 26px;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  &__calibration-title {
+  &__content--settings &__calibration {
+    min-height: 536px;
+  }
+
+  &__calibration-title,
+  &__title,
+  &__section-title {
+    font-family: $font-family-primary;
+    font-weight: 300;
+    color: $color-white;
+    text-align: center;
+  }
+
+  &__calibration-title,
+  &__title {
     font-size: 40px;
     line-height: 53px;
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
   }
 
   &__calibration-device {
     width: 321px;
     height: 163px;
     object-fit: contain;
-    margin-bottom: 10px;
+    margin-top: 22px;
   }
 
   &__calibration-controls {
     width: 100%;
-    margin-top: 50px;
+    margin-top: 42px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 30px;
   }
 
   &__slider-group {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
-  }
-
-  &__slider-label {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 25px;
-    line-height: 33px;
-    font-weight: 300;
-    letter-spacing: 1px;
-    color: #FFFFFF;
-    text-align: center;
-    z-index: 1;
-    pointer-events: none;
-    white-space: nowrap;
   }
 
   &__slider-container {
     position: relative;
+    width: 856px;
     height: 29px;
-    background: #5A5A5A;
+    background: #090a11;
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: 25px;
     overflow: hidden;
-  }
-
-  &__slider {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    outline: none;
-    z-index: 2;
-    cursor: pointer;
-
-    &::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 0;
-      height: 0;
-    }
-
-    &::-moz-range-thumb {
-      width: 0;
-      height: 0;
-      border: none;
-      background: transparent;
-    }
   }
 
   &__slider-fill {
@@ -123,302 +96,229 @@
     top: 0;
     left: 0;
     height: 100%;
-    background: #ef0f69;
-    border-radius: 10px;
-    pointer-events: none;
-    transition: width 0.1s ease;
+    background: $color-ultima-pink;
+    border-radius: 25px;
 
     &--inactive {
-      background: #5A5A5A;
+      background: transparent;
     }
   }
 
-  &__slider-value {
-    font-size: 30px;
-    line-height: 40px;
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
+  &__slider-label {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-white;
+    font-size: 25px;
+    line-height: 29px;
   }
 
+  &__slider-value,
   &__temperature {
     font-size: 25px;
     line-height: 33px;
     font-weight: 300;
-    color: #FFFFFF;
+    color: $color-white;
     text-align: center;
   }
 
-  &__temperature-ok {
-    color: #4CAF50;
-    font-weight: 500;
+  &__temperature-ok,
+  &__laser-temp-value {
+    color: $color-green;
   }
 
-  // Settings Title
+  &__recalibration {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 100px;
+  }
+
+  &__recalibration-button,
+  &__start-button {
+    @include button-rounded(5px, $color-ultima-pink, $color-ultima-pink);
+    @include glass-button-shine;
+    width: 368px;
+    height: 71px;
+    font-size: 22px;
+    font-weight: 400;
+  }
+
   &__title {
-    font-size: 40px;
-    line-height: 53px;
-    font-weight: 300;
-    color: #FFFFFF;
-    margin: 16px 0;
-    text-align: center;
+    margin: 22px 0;
   }
 
-  // Section Styling
-  &__section {
-    position: relative;
-    width: 954px;
-    background: transparent;
-    border: 2px solid $box-border-color;
-    border-radius: 30px;
-    padding: 20px 30px;
-    margin-bottom: 20px;
+  &__optical-section {
+    height: 880px;
+    padding: 34px 0 0;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
   &__section-title {
+    margin: 0 0 36px;
     font-size: 40px;
     line-height: 53px;
-    // margin-top: 10px; // original
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
-    margin-bottom: 40px;
+    text-transform: none;
   }
 
-  
-  &__skin-types {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    gap: 10px;
-  }
-
-  &__skin-type {
-    @include interactive-element;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-
-    &--selected &-circle {
-      border: 3px solid $box-border-color;
-      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-    }
-  }
-
-  &__skin-type-circle {
-    width: 115px;
-    height: 115px;
+  &__scan-target {
+    width: 580px;
+    height: 580px;
     border-radius: 50%;
-    transition: all 0.3s ease;
-  }
-
-  &__skin-type-label {
-    font-size: 40px;
-    line-height: 53px;
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
-  }
-
-  // Hair Colors
-  &__hair-colors {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    gap: 8px;
-  }
-
-  &__hair-color {
-    @include interactive-element;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-
-    &:hover:not(&--disabled) {
-      transform: scale(1.05);
-    }
-
-    &--selected &-circle {
-      border: 3px solid $box-border-color;
-      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-    }
-
-    &--disabled {
-      cursor: not-allowed;
-      opacity: 0.7;
-    }
-  }
-
-  &__hair-color-circle {
-    width: 115px;
-    height: 115px;
-    border-radius: 50%;
-    background: #333;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    position: relative;
-  }
-
-  &__hair-color-image {
-    width: 115px;
-    height: 115px;
     object-fit: cover;
-    border-radius: 50%;
+    border: 3px solid $color-white;
   }
 
-  &__hair-color-blocked {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    pointer-events: none;
-    
-    &::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 140%;
-      height: 4px;
-      background-color: #FF0000;
-      transform: translate(-50%, -50%) rotate(-45deg);
-      box-shadow: 0 0 4px rgba(255, 0, 0, 0.5);
-    }
+  &__section {
+    padding: 32px 40px 20px;
+    margin-bottom: 20px;
   }
 
-  &__hair-color-label {
-    font-size: 22px;
-    line-height: 30px;
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
-    white-space: nowrap;
+  &__section:nth-of-type(3) {
+    padding-bottom: 28px;
   }
 
-  // Hair Types
+  &__skin-types,
+  &__hair-colors,
   &__hair-types {
-    display: flex;
-    justify-content: space-around;
     width: 100%;
-    gap: 30px;
-    padding: 0 135px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
   }
 
+  &__hair-types {
+    padding: 0 165px;
+  }
+
+  &__skin-type,
+  &__hair-color,
   &__hair-type {
     @include interactive-element;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    overflow: visible;
-
-    &--selected &-icon {
-      border: 3px solid $box-border-color;
-      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-    }
+    gap: 8px;
   }
 
+  &__skin-type-circle,
+  &__hair-color-circle,
   &__hair-type-icon {
     width: 115px;
     height: 115px;
     border-radius: 50%;
-    background: transparent;
+    transition: all $transition-normal;
+  }
+
+  &__skin-type--selected &__skin-type-circle,
+  &__hair-color--selected &__hair-color-circle {
+    border: 6px solid $color-white;
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.45);
+  }
+
+  &__skin-type-label {
+    font-size: 40px;
+    line-height: 53px;
+    color: $color-white;
+  }
+
+  &__hair-color-circle {
+    position: relative;
+    overflow: visible;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: visible;
+    background: transparent;
   }
 
-  &__hair-type--selected &__hair-type-icon {
+  &__hair-color-image {
+    width: 84px;
+    height: 120px;
+    object-fit: contain;
+  }
+
+  &__hair-color--disabled {
+    opacity: 0.82;
+    cursor: not-allowed;
+  }
+
+  &__hair-color-blocked {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
     &::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      overflow: hidden;
-      z-index: 0;
-      pointer-events: none;
+      left: 17px;
+      top: 54px;
+      width: 90px;
+      height: 4px;
+      background: #ff0000;
+      transform: rotate(-45deg);
     }
+  }
 
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100%;
-      height: 60%;
-      background: radial-gradient(ellipse at bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.2) 40%, transparent 80%);
-      pointer-events: none;
-      z-index: 0;
-      border-radius: 50%;
-      clip-path: circle(50% at center);
-    }
+  &__hair-color-label,
+  &__hair-type-label {
+    font-size: 22px;
+    line-height: 30px;
+    color: $color-white;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  &__hair-type-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__hair-type--selected &__hair-type-icon::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    width: 80px;
+    height: 22px;
+    border: 2px solid $color-white;
+    border-radius: 50%;
+    transform: translateX(-50%);
   }
 
   &__hair-type-image {
+    width: 88px;
     height: 127px;
     object-fit: contain;
-    position: relative;
-    z-index: 15;
-    margin-bottom: 40px;
   }
 
-  &__hair-type-label {
-    font-size: 30px;
-    line-height: 40px;
-    font-weight: 300;
-    color: #FFFFFF;
-    text-align: center;
-  }
-
-  // Laser Module Temperature
   &__laser-temp {
+    margin-top: auto;
     font-size: 30px;
     line-height: 40px;
-    font-weight: 300;
-    
-    color: #FFFFFF;
-    margin: 20px 0;
-    text-align: center;
+    color: $color-white;
   }
 
-  &__laser-temp-value {
-    color: #4CAF50;
-    font-weight: 500;
-  }
-
-  // Start Button
   &__start-button {
-    @include button-rounded(5px, #FA7E4E, #FA7E4E);
-    @include button-shadow-effect;
-    width: 380px;
-    height: 71px;
-    font-size: 22px;
-    line-height: 30px;
-    font-weight: 500;
-    letter-spacing: 1px;
-    margin-top: 10px;
+    margin-top: 16px;
 
-    &:hover {
-      background: rgba(250, 126, 78, 0.1);
-      box-shadow: 0 0 20px rgba(250, 126, 78, 0.4);
-      transform: scale(1.02);
+    &--calibration {
+      color: $color-ultima-pink;
+      border-color: $color-ultima-pink;
+    }
+
+    &--settings {
+      color: #FA7E4E;
+      border-color: #FA7E4E;
     }
   }
 }

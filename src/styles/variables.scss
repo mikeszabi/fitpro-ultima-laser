@@ -11,6 +11,9 @@ $color-blue: #0066ff;
 $color-blue-light: #577FCF;
 $color-green: #06CC1A;
 $color-red: #ff0033;
+$color-ultima-orange: #ff7a1a;
+$color-ultima-pink: #ef0f69;
+$color-ultima-blue: #4e86ff;
 $color-gray: #666;
 $color-gray-light: #999;
 $color-gray-dark: #333;
@@ -97,6 +100,33 @@ $aspect-ratio: calc(9 / 16);
   margin: 0 auto;
   background: #000;
   overflow: hidden;
+}
+
+@mixin ultima-background($position: center center) {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.18)),
+    url('/assets/ultima-wave-bg.webp');
+  background-size: auto 100%, auto 100%;
+  background-position: center, $position;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+@mixin glass-button-shine {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 42%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.1) 48%, transparent 50%);
+    opacity: 0.9;
+    pointer-events: none;
+  }
 }
 
 // Box container styling

@@ -4,166 +4,107 @@
   @include screen-container;
 
   &__background {
-    position: absolute;
-    top: -35.91796875px;
-    left: -34.1043701171875px;
-    width: 1244px;
-    height: 2097px;
-    background: transparent url('/assets/Background-1.png') 0% 0% no-repeat padding-box;
-    z-index: 0;
+    @include ultima-background(50% center);
   }
 
   &__content {
     position: relative;
     z-index: 1;
     width: 954px;
-    padding-top: 80px;
+    height: 1920px;
     margin: 0 auto;
+    padding-top: 78px;
   }
 
   &__title {
-    font-family: $font-family-primary;
-    font-size: $font-size-lg;
-    font-weight: $font-weight-normal;
+    margin: 0 0 44px;
+    font-size: 40px;
+    line-height: 53px;
+    font-weight: 300;
     color: $color-white;
     text-align: center;
-    margin: 0 0 40px;
   }
 
-  // Settings Row
   &__settings-row {
     display: flex;
     justify-content: space-around;
-    align-items: center;
-    margin-bottom: 40px;
-  }
-
-  &__setting {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: $font-family-primary;
-    font-size: $font-size-md;
-    line-height: $line-height-md;
+    margin-bottom: 42px;
+    font-size: 25px;
+    line-height: 33px;
     color: $color-white;
   }
 
-  &__setting-label {
-    font-weight: $font-weight-normal;
+  &__output-performance,
+  &__treatment-mode,
+  &__camera-section {
+    border: 3px solid $color-white;
+    border-radius: 39px;
+    background: rgba(0, 0, 0, 0.48);
   }
 
-  &__setting-value {
-    font-weight: $font-weight-normal;
-  }
-
-  &__setting-icon {
-    width: 44px;
-    object-fit: contain;
-  }
-
-  // Output Performance Section
   &__output-performance {
-    @include box-container;
-    margin-bottom: 25px;
+    height: 616px;
+    padding: 0 48px 28px;
   }
 
   &__section-title {
-    font-family: $font-family-primary;
-    font-size: $font-size-lg;
-    line-height: $line-height-lg;
-    font-weight: $font-weight-normal;
+    margin: 0;
+    font-size: 40px;
+    line-height: 53px;
+    font-weight: 300;
     color: $color-white;
     text-align: center;
-    margin: 0 0 40px;
-    letter-spacing: 1px;
   }
 
-  &__performance-content {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  &__laser-bars {
-    display: flex;
-    justify-content: space-evenly;
-    align-items: flex-end;
-  }
-
-  &__scale-container {
-    display: flex;
+  &__performance-grid {
     position: relative;
-    align-self: flex-end;
-    margin-bottom: 40px;
-
-    &--left {
-      margin-right: 5px;
-      flex-direction: row;
-    }
-
-    &--right {
-      margin-left: 5px;
-      flex-direction: row;
-    }
-
-    &--margin-right {
-      margin-right: $spacing-2xl;
-    }
-
-    &--margin-left {
-      margin-left: $spacing-2xl;
-    }
+    height: 432px;
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: 58px 88px 88px 88px 1fr 88px 62px;
+    align-items: end;
+    column-gap: 45px;
   }
 
   &__scale {
-    object-fit: contain;
-
-    &--right {
-      transform: scaleX(-1);
-    }
-  }
-
-  &__scale-labels {
+    height: 360px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    margin: -10px 5px;
-  }
-
-  &__scale-label {
-    font-family: $font-family-primary;
-    font-size: $font-size-sm;
-    line-height: $line-height-sm;
-    font-weight: $font-weight-normal;
     color: $color-white;
-    white-space: nowrap;
-  }
+    font-size: 20px;
+    line-height: 24px;
+    position: relative;
 
-  // Left scale: labels on left side, right-aligned
-  &__scale-container--left &__scale-label {
-    text-align: right;
-  }
-
-  // Right scale: labels on right side, left-aligned
-  &__scale-container--right &__scale-label {
-    text-align: left;
-  }
-
-  &__laser-group {
-    display: flex;
-    justify-content: center;
-
-    &:first-child {
-      flex: 1;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 22px;
+      bottom: 22px;
+      width: 18px;
+      background:
+        repeating-linear-gradient(to bottom, transparent 0 30px, rgba(255, 255, 255, 0.75) 30px 33px),
+        linear-gradient($color-white, $color-white);
+      background-size: 18px 100%, 2px 100%;
+      background-repeat: no-repeat;
     }
 
-    &:last-child {
-      flex: 0 0 auto;
-      width: 300px;
+    &--left {
+      align-items: flex-end;
+
+      &::after {
+        right: -22px;
+        background-position: right center, right center;
+      }
     }
 
-    &__scale {
-      display: flex;
+    &--right {
+      align-items: flex-start;
+
+      &::after {
+        left: -22px;
+        background-position: left center, left center;
+      }
     }
   }
 
@@ -174,267 +115,299 @@
   }
 
   &__bar-label {
-    font-family: $font-family-primary;
-    font-size: $font-size-sm;
-    line-height: $line-height-sm;
-    font-weight: $font-weight-normal;
+    margin-bottom: 10px;
+    font-size: 17px;
+    line-height: 22px;
+    font-weight: 600;
     color: $color-white;
-    margin-bottom: $spacing-xs;
-  }
-
-  &__bar-scale {
-    font-family: $font-family-primary;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-  }
-
-  &__bar-wrapper {
-    height: 360px;
-    display: flex;
-    align-items: flex-end;
-    cursor: pointer;
-    position: relative;
-    touch-action: none; // Prevent default touch behaviors for better swipe control
-    user-select: none; // Prevent text selection during swipe
   }
 
   &__bar {
-    width: 82px;
-    height: 100%;
-    background: rgba(128, 128, 128, 0.5);
-    border-radius: 20px 20px 0 0;
-    overflow: hidden;
+    width: 78px;
+    height: 360px;
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    cursor: pointer;
-    transition: transform $transition-fast;
+    overflow: hidden;
+    border-radius: 20px 20px 0 0;
+    background: #10111b;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: ns-resize;
+    touch-action: none;
+    user-select: none;
+
+    &:focus-visible {
+      outline: 3px solid rgba(255, 255, 255, 0.8);
+      outline-offset: 4px;
+    }
   }
 
   &__bar-fill {
-    width: 100%;
-    transition: height $transition-normal;
     position: absolute;
-    bottom: 0;
-    left: 0;
+    inset: auto 0 0;
 
     &--claret {
-      background: #820303;
+      background: #a00000;
     }
 
     &--red {
-      background: #cb0209;
+      background: #f1060b;
     }
 
     &--orange {
-      background: #fa3c00;
+      background: #ff4d0b;
     }
 
     &--blue {
-      background: #3d76d5;
+      background: #4f86ff;
     }
   }
 
   &__bar-value {
-    font-family: $font-family-primary;
-    font-size: $font-size-sm;
-    line-height: $line-height-sm;
-    font-weight: $font-weight-normal;
+    width: 78px;
+    height: 31px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: $color-white;
-    background: #000;
-    width: 82px;
+    background: #060606;
+    border-radius: 0 0 10px 10px;
+    font-size: 16px;
+  }
+
+  &__red-dot {
+    align-self: center;
+    justify-self: center;
+    margin-top: 210px;
+    color: $color-white;
+    font-size: 20px;
     text-align: center;
-    padding: 8px 0;
-    border-radius: 0 0 20px 20px;
-    border: 1px solid #fff;
+  }
+
+  &__segmented {
+    display: inline-flex;
+    margin-top: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 18px;
+    overflow: hidden;
+    background: #15151d;
+
+    button {
+      min-width: 58px;
+      height: 32px;
+      border: 0;
+      color: $color-white;
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+
+      &.is-active {
+        background: linear-gradient(180deg, #ffb26f, #ff6b18 45%, #d92f20);
+      }
+    }
+
+    &--small {
+      margin: 0;
+
+      button {
+        min-width: 48px;
+        height: 28px;
+        font-size: 18px;
+      }
+    }
   }
 
   &__total-power {
     display: flex;
     justify-content: center;
-    align-items: center;
-    gap: 15px;
-    font-family: $font-family-primary;
-    font-size: $font-size-md;
-    line-height: $line-height-md;
+    gap: 80px;
+    font-size: 30px;
+    line-height: 40px;
     color: $color-white;
   }
 
-  &__total-power-label {
-    font-weight: $font-weight-normal;
-  }
-
-  &__total-power-value {
-    font-weight: $font-weight-bold;
-  }
-
-  // Treatment Mode Section
   &__treatment-mode {
-    @include box-container;
-    margin-bottom: 20px;
+    height: 205px;
+    margin-top: 40px;
+    padding-top: 8px;
   }
 
   &__mode-buttons {
+    margin-top: 24px;
+    padding: 0 170px;
     display: flex;
-    justify-content: space-around;
-    width: 100%;
-    gap: 30px;
-    padding: 0 135px;
+    justify-content: space-between;
   }
 
   &__mode-button {
-    @include button-circular(115px, 3px);
+    width: 115px;
+    height: 115px;
+    border: 3px solid $color-white;
+    border-radius: 50%;
+    background: transparent;
+    color: $color-white;
+    font-size: 30px;
+    line-height: 34px;
+    font-family: $font-family-primary;
+    cursor: pointer;
+
+    &--active {
+      background: radial-gradient(circle at center, rgba(250, 126, 78, 0.72), rgba(250, 126, 78, 0.24) 58%, transparent 62%);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85);
+    }
+  }
+
+  &__laser-temp {
+    margin-top: 20px;
     font-size: 30px;
     line-height: 40px;
-    font-weight: 200;
-  }
-
-  // Laser Module Temperature
-  &__laser-temp {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    font-family: $font-family-primary;
-    font-size: $font-size-md;
-    line-height: $line-height-md;
     color: $color-white;
-    margin-bottom: 20px;
-  }
+    text-align: center;
 
-  &__laser-temp-label {
-    font-weight: $font-weight-normal;
-  }
-
-  &__laser-temp-value {
-    font-weight: $font-weight-bold;
-    color: $color-green;
-  }
-
-  // Standby/Ready Button (using same style as settings start button)
-  &__standby-button {
-    @include button-rounded(3px, #FA7E4E, #FA7E4E);
-    @include button-shadow-effect;
-    display: block;
-    margin: 0 auto 20px;
-    width: 368px;
-    height: 71px;
-    font-size: 22px;
-    line-height: 30px;
-    font-weight: 500;
-    letter-spacing: 1px;
-
-    &:hover {
-      background: rgba(250, 126, 78, 0.1);
-      box-shadow: 0 0 20px rgba(250, 126, 78, 0.4);
-      transform: scale(1.02);
-    }
-
-    &--ready {
-      background: rgba(0, 255, 136, 0.1);
-      border-color: $color-green;
+    span {
       color: $color-green;
     }
   }
 
-  // Camera and Status Section
+  &__arm-button {
+    @include button-rounded(3px, $color-ultima-orange, $color-ultima-orange);
+    @include glass-button-shine;
+    display: block;
+    width: 430px;
+    height: 72px;
+    margin: 14px auto 20px;
+    font-size: 25px;
+    color: $color-ultima-orange;
+
+    &--ready {
+      color: $color-white;
+      border-color: $color-white;
+    }
+  }
+
   &__camera-section {
-    @include box-container;
-    background: rgba(0, 0, 0, 0.4);
+    height: 580px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
-    gap: 20px;
-    padding: 0 !important;
+    grid-template-columns: 560px 1fr;
+    gap: 28px;
+    padding: 0 52px 0 0;
+
+    &--ready {
+      border-color: $color-ultima-orange;
+    }
   }
 
   &__camera-container {
-    grid-row: 1 / 3;
+    position: relative;
+    overflow: hidden;
+    border-radius: 39px 0 0 39px;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
   }
 
-  &__camera-placeholder {
-    width: 580px;
-    height: 580px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.8);
-    border: 3px solid rgba(255, 255, 255, 0.3);
-  }
-
+  &__camera-placeholder,
   &__camera-feed {
     width: 580px;
     height: 580px;
     border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid rgba(255, 255, 255, 0.5);
+    border: 5px solid currentColor;
+    color: $color-white;
   }
 
-  &__status {
+  &__camera-feed {
+    object-fit: cover;
+    color: $color-ultima-orange;
+  }
+
+  &__camera-placeholder {
+    background: rgba(0, 0, 0, 0.65);
+  }
+
+  &__status-panel {
+    padding-top: 42px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-
-    font-size: $font-size-md;
-    line-height: $line-height-md;
-    justify-content: flex-start;
     align-items: center;
-    gap: 30px;
-    padding-top: 40px;
-  }
-
-  &__status-item {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    white-space: nowrap;
-  }
-
-  &__status-label {
-    font-weight: $font-weight-semibold;
-  }
-
-  &__status-value {
-    font-weight: $font-weight-bold;
-
-    &--ok {
-      color: $color-green;
-      text-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
-    }
-
-    &--no {
-      color: $color-red;
-      text-shadow: 0 0 10px rgba(255, 0, 51, 0.6);
-    }
-  }
-
-  &__follicles {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin-top: auto;
-    padding-bottom: 20px;
-    font-size: $font-size-sm;
-    line-height: $line-height-sm;
-    font-family: $font-family-primary;
     color: $color-white;
+  }
+
+  &__toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 284px;
+    gap: 12px;
+    font-size: 27px;
+    line-height: 40px;
     white-space: nowrap;
+
+    & + & {
+      margin-top: 12px;
+    }
   }
 
-  &__follicles-label {
-    font-weight: $font-weight-semibold;
+  &__confidence {
+    width: 260px;
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 24px;
+    line-height: 30px;
+
+    input {
+      accent-color: $color-ultima-orange;
+    }
   }
 
-  &__follicles-value {
-    font-weight: $font-weight-bold;
+  &__fire-button {
+    @include button-rounded(3px, #ff9b00, #ff9b00);
+    @include glass-button-shine;
+    width: 220px;
+    height: 90px;
+    margin-top: 34px;
+    font-size: 42px;
+    font-weight: 300;
+
+    &:disabled {
+      opacity: 0.62;
+      cursor: wait;
+    }
+  }
+
+  &__target-state {
+    margin-top: auto;
+    margin-bottom: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 30px;
+    line-height: 36px;
+
+    strong {
+      font-weight: 400;
+
+      &.is-ok {
+        color: $color-green;
+      }
+
+      &.is-no {
+        color: $color-red;
+      }
+    }
+
+    small {
+      font-size: 18px;
+      line-height: 24px;
+    }
+  }
+
+  &__api-status {
+    max-width: 270px;
+    color: rgba(255, 255, 255, 0.78);
+    text-align: center;
+  }
+
+  button:disabled {
+    cursor: wait;
   }
 }

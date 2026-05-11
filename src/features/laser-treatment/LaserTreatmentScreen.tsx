@@ -1,413 +1,487 @@
-import { useState, useRef, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppSelector } from '@/store/hooks'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { showError } from '@/store/slices/systemSlice'
 import BackButton from '@/components/common/BackButton'
+import { hairKillerApi } from '@/services/hairKillerApi'
+import type { TreatmentMode } from '@/types'
 import './LaserTreatmentScreen.scss'
 
-type TreatmentMode = 'auto' | 'semi-auto' | 'manual'
 type LaserRunState = 'standby' | 'ready'
 
 const LaserTreatmentScreen: React.FC = () => {
   const { t } = useTranslation()
+  const dispatch = useAppDispatch()
   const settings = useAppSelector((state) => state.settings)
-  
+
   const [treatmentMode, setTreatmentMode] = useState<TreatmentMode>('semi-auto')
   const [laserState, setLaserState] = useState<LaserRunState>('standby')
-  const [isAdjusting, setIsAdjusting] = useState(false)
-  const [laserTemp, setLaserTemp] = useState(21)
+  const [laserTemp] = useState(21)
+  const [vacuumEnabled, setVacuumEnabled] = useState(false)
   const [vacuumLock, setVacuumLock] = useState(false)
+  const [redDot, setRedDot] = useState(false)
   const [target, setTarget] = useState(false)
+  const [confidence, setConfidence] = useState(0.1)
   const [targetedFollicles, setTargetedFollicles] = useState(0)
-  
-  // Output performance values (calculated from settings)
+  const [loadedTargetCount, setLoadedTargetCount] = useState(0)
   const [nm808Power, setNm808Power] = useState(12)
   const [nm980Power, setNm980Power] = useState(12)
   const [nm1064Power, setNm1064Power] = useState(12)
-  const [pulseWidth, setPulseWidth] = useState(10)
-  
-  // Camera
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [cameraActive, setCameraActive] = useState(false)
-
-  // TODO remove when backend is ready
-  useEffect(() => {
-    setLaserTemp(21)
-  }, [])
-
-  const handleStandbyToggle = () => {
-    if (laserState === 'standby') {
-      setLaserState('ready')
-      setCameraActive(true)
-      setVacuumLock(true)
-      setTarget(true)
-      setTargetedFollicles(6)
-    } else {
-      setLaserState('standby')
-      setCameraActive(false)
-      setVacuumLock(false)
-      setTarget(false)
-      setTargetedFollicles(0)
-    }
-  }
-
-  // Mock camera activation
-  useEffect(() => {
-    if (cameraActive && videoRef.current) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-          }
-        })
-        .catch((err) => {
-          console.error('Camera access error:', err)
-        })
-    } else if (!cameraActive && videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream
-      stream.getTracks().forEach((track) => track.stop())
-      videoRef.current.srcObject = null
-    }
-  }, [cameraActive])
-
-  const getSkinTypeLabel = () => {
-    if (!settings.skinType) return t('settings.skinType.type3')
-    const skinTypeMap: Record<string, string> = {
-      'I': t('settings.skinType.type1'),
-      'II': t('settings.skinType.type2'),
-      'III': t('settings.skinType.type3'),
-      'IV': t('settings.skinType.type4'),
-      'V': t('settings.skinType.type5'),
-      'VI': t('settings.skinType.type6')
-    }
-    return skinTypeMap[settings.skinType] || t('settings.skinType.type3')
-  }
-
-  const getHairColorLabel = () => {
-    if (!settings.hairColor) return t('settings.hairColor.darkBrown')
-    const colorMap: Record<string, string> = {
-      'blonde': t('settings.hairColor.blonde'),
-      'brown': t('settings.hairColor.brown'),
-      'dark-brown': t('settings.hairColor.darkBrown'),
-      'black': t('settings.hairColor.black'),
-      'red': t('settings.hairColor.red'),
-      'grey-white': t('settings.hairColor.greyWhite')
-    }
-    return colorMap[settings.hairColor] || t('settings.hairColor.darkBrown')
-  }
-
-  const getHairTypeLabel = () => {
-    if (!settings.hairType) return t('settings.hairType.medium')
-    const hairTypeMap: Record<string, string> = {
-      'thin': t('settings.hairType.thin'),
-      'medium': t('settings.hairType.medium'),
-      'thick': t('settings.hairType.thick')
-    }
-    return hairTypeMap[settings.hairType] || t('settings.hairType.medium')
-  }
+  const [pulseWidth, setPulseWidth] = useState(80)
+  const [apiStatus, setApiStatus] = useState('Backend: checking')
+  const [isBusy, setIsBusy] = useState(false)
+  const settingsLoadedRef = useRef(false)
 
   const totalOutputPower = nm808Power + nm980Power + nm1064Power
 
-  // Common function to calculate bar value from position
+  const showBackendError = useCallback((title: string, error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Unknown backend error'
+    setApiStatus(message)
+    dispatch(showError({ title, message }))
+  }, [dispatch])
+
+  const runBackendAction = useCallback(async (
+    label: string,
+    action: () => Promise<void>,
+  ) => {
+    setIsBusy(true)
+    setApiStatus(`${label}...`)
+
+    try {
+      await action()
+      setApiStatus(`${label}: OK`)
+    } catch (error) {
+      showBackendError(label, error)
+    } finally {
+      setIsBusy(false)
+    }
+  }, [showBackendError])
+
+  const syncBackendState = useCallback(async () => {
+    try {
+      const [health, laserSettings, detectionStatus, stats] = await Promise.all([
+        hairKillerApi.health(),
+        hairKillerApi.getLaserSettings(),
+        hairKillerApi.getDetectionStatus(),
+        hairKillerApi.getStats(),
+      ])
+
+      setLaserState(laserSettings.armed ? 'ready' : 'standby')
+      setNm808Power(laserSettings.power.p808)
+      setNm980Power(laserSettings.power.p980)
+      setNm1064Power(laserSettings.power.p1064)
+      setPulseWidth(laserSettings.pulse_ms)
+      setConfidence(detectionStatus.conf)
+      setRedDot(detectionStatus.red_dot || stats.red_dot_enabled)
+      setTarget(stats.detection_count > 0 || stats.detected_points > 0 || laserSettings.targets_count > 0)
+      setTargetedFollicles(laserSettings.targets_count || stats.detected_points || stats.detection_count)
+      setLoadedTargetCount(laserSettings.targets_count)
+      setApiStatus(health.ok ? 'Backend: connected' : 'Backend: not ready')
+      settingsLoadedRef.current = true
+    } catch (error) {
+      showBackendError('Backend connection', error)
+    }
+
+  }, [showBackendError])
+
+  useEffect(() => {
+    syncBackendState()
+
+    const statsInterval = window.setInterval(async () => {
+      try {
+        const stats = await hairKillerApi.getStats()
+
+        setTarget(stats.detection_count > 0 || stats.detected_points > 0)
+        setTargetedFollicles(stats.detected_points || stats.detection_count)
+        setRedDot(stats.red_dot_enabled)
+      } catch {
+        setApiStatus('Backend: polling failed')
+      }
+    }, 2500)
+
+    const detectionEvents = new EventSource(`${hairKillerApi.baseUrl}/sse/detection`)
+    detectionEvents.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as { count?: number }
+        const count = data.count || 0
+        setTarget(count > 0)
+        setTargetedFollicles(count)
+      } catch {
+        // Ignore malformed SSE payloads; the polling loop still keeps state fresh.
+      }
+    }
+
+    return () => {
+      window.clearInterval(statsInterval)
+      detectionEvents.close()
+    }
+  }, [syncBackendState])
+
+  useEffect(() => {
+    if (!settingsLoadedRef.current) return
+
+    const handle = window.setTimeout(() => {
+      hairKillerApi.updateLaserSettings({
+        armed: laserState === 'ready',
+        p808: nm808Power,
+        p980: nm980Power,
+        p1064: nm1064Power,
+        pulse_ms: pulseWidth,
+        reload_targets: true,
+      }).catch((error) => showBackendError('Laser settings', error))
+    }, 350)
+
+    return () => window.clearTimeout(handle)
+  }, [laserState, nm808Power, nm980Power, nm1064Power, pulseWidth, showBackendError])
+
+  const captureAndLoadTargets = useCallback(async () => {
+    const capture = await hairKillerApi.captureDetections()
+    setTarget(capture.captured > 0)
+    setTargetedFollicles(capture.captured)
+
+    if (capture.captured === 0) {
+      await hairKillerApi.clearTargets()
+      await hairKillerApi.showTargets(false)
+      setLoadedTargetCount(0)
+      return 0
+    }
+
+    const targets = await hairKillerApi.updateTargets()
+    await hairKillerApi.showTargets(true)
+    setTargetedFollicles(targets.targets_count)
+    setLoadedTargetCount(targets.targets_count)
+    return targets.targets_count
+  }, [])
+
+  const fireLoadedSequence = useCallback(async () => {
+    if (treatmentMode === 'manual') {
+      await hairKillerApi.setSequenceMode('manual')
+      await hairKillerApi.stepSequence()
+      return
+    }
+
+    await hairKillerApi.setSequenceMode('auto')
+    await hairKillerApi.startSequence()
+  }, [treatmentMode])
+
+  const handleArmToggle = () => {
+    const nextReady = laserState === 'standby'
+
+    runBackendAction(nextReady ? 'Arm laser' : 'Disarm laser', async () => {
+      await hairKillerApi.updateLaserSettings({
+        armed: nextReady,
+        p808: nm808Power,
+        p980: nm980Power,
+        p1064: nm1064Power,
+        pulse_ms: pulseWidth,
+        reload_targets: true,
+      })
+      setLaserState(nextReady ? 'ready' : 'standby')
+    })
+  }
+
+  const handleModeChange = (mode: TreatmentMode) => {
+    setTreatmentMode(mode)
+
+    runBackendAction('Treatment mode', async () => {
+      await hairKillerApi.setDetectionEnabled(true)
+      await hairKillerApi.setVacuumCheckEnabled(mode !== 'manual')
+      await hairKillerApi.setSequenceMode(mode)
+
+      if (mode === 'manual') {
+        setVacuumLock(false)
+      }
+    })
+  }
+
+  const handleVacuumEnabledChange = (enabled: boolean) => {
+    runBackendAction('Vacuum', async () => {
+      await hairKillerApi.setVacuumEnabled(enabled)
+      setVacuumEnabled(enabled)
+      if (!enabled) setVacuumLock(false)
+    })
+  }
+
+  const handleVacuumLockChange = (locked: boolean) => {
+    runBackendAction('Vacuum lock', async () => {
+      setVacuumLock(locked)
+      await hairKillerApi.setDetectionEnabled(true)
+
+      if (!locked || treatmentMode === 'manual') {
+        return
+      }
+
+      const targetsCount = await captureAndLoadTargets()
+      if (treatmentMode === 'auto' && targetsCount > 0) {
+        await fireLoadedSequence()
+      }
+    })
+  }
+
+  const handleRedDotChange = (enabled: boolean) => {
+    runBackendAction('Red dot', async () => {
+      const response = await hairKillerApi.setRedDot(enabled)
+      setRedDot(response.enabled)
+    })
+  }
+
+  const handleConfidenceChange = (value: number) => {
+    const normalizedValue = Number((value / 100).toFixed(2))
+    setConfidence(normalizedValue)
+    hairKillerApi.setDetectionConfidence(normalizedValue)
+      .then((response) => setConfidence(response.conf))
+      .catch((error) => showBackendError('Detection sensitivity', error))
+  }
+
+  const handleFire = () => {
+    runBackendAction('Fire', async () => {
+      await hairKillerApi.updateLaserSettings({
+        armed: true,
+        p808: nm808Power,
+        p980: nm980Power,
+        p1064: nm1064Power,
+        pulse_ms: pulseWidth,
+        reload_targets: true,
+      })
+      setLaserState('ready')
+
+      if (treatmentMode === 'manual') {
+        let targetsCount = loadedTargetCount
+        if (targetsCount === 0) {
+          targetsCount = await captureAndLoadTargets()
+        }
+        if (targetsCount === 0) return
+        await fireLoadedSequence()
+        return
+      }
+
+      let targetsCount = loadedTargetCount
+      if (targetsCount === 0) {
+        targetsCount = await captureAndLoadTargets()
+      }
+
+      if (targetsCount === 0) return
+      await fireLoadedSequence()
+    })
+  }
+
+  const getSkinTypeLabel = () => settings.skinType || 'III'
+  const getHairColorLabel = () => {
+    const colorMap: Record<string, string> = {
+      'grey-white': t('settings.hairColor.greyWhite'),
+      red: t('settings.hairColor.red'),
+      blonde: t('settings.hairColor.blonde'),
+      brown: t('settings.hairColor.brown'),
+      'dark-brown': t('settings.hairColor.darkBrown'),
+      black: t('settings.hairColor.black')
+    }
+    return settings.hairColor ? colorMap[settings.hairColor] : t('settings.hairColor.darkBrown')
+  }
+
+  const getHairTypeLabel = () => {
+    const hairTypeMap: Record<string, string> = {
+      thin: t('settings.hairType.thin'),
+      medium: t('settings.hairType.medium'),
+      thick: t('settings.hairType.thick')
+    }
+    return settings.hairType ? hairTypeMap[settings.hairType] : t('settings.hairType.medium')
+  }
+
   const calculateBarValue = (
     clientY: number,
-    rect: DOMRect,
+    element: HTMLDivElement,
     minValue: number,
     maxValue: number
-  ): number => {
-    const clickY = clientY - rect.top
-    const percentage = 1 - (clickY / rect.height) // Invert because bars fill from bottom
-    return Math.max(minValue, Math.min(maxValue, Math.round(percentage * (maxValue - minValue) + minValue)))
+  ) => {
+    const rect = element.getBoundingClientRect()
+    const position = 1 - ((clientY - rect.top) / rect.height)
+    const value = minValue + position * (maxValue - minValue)
+
+    return Math.max(minValue, Math.min(maxValue, Math.round(value)))
   }
 
-  // Handle bar click
-  const handleBarClick = (
-    e: React.MouseEvent<HTMLDivElement>,
+  const updateBarFromPointer = (
+    event: React.PointerEvent<HTMLDivElement>,
     setter: (value: number) => void,
     minValue: number,
     maxValue: number
   ) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const newValue = calculateBarValue(e.clientY, rect, minValue, maxValue)
-    setter(newValue)
-    setIsAdjusting(true)
+    setter(calculateBarValue(event.clientY, event.currentTarget, minValue, maxValue))
   }
 
-  // Handle touch start
-  const handleBarTouchStart = (
-    e: React.TouchEvent<HTMLDivElement>,
+  const startBarDrag = (
+    event: React.PointerEvent<HTMLDivElement>,
     setter: (value: number) => void,
     minValue: number,
     maxValue: number
   ) => {
-    e.preventDefault()
-    const rect = e.currentTarget.getBoundingClientRect()
-    const newValue = calculateBarValue(e.touches[0].clientY, rect, minValue, maxValue)
-    setter(newValue)
-    setIsAdjusting(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    updateBarFromPointer(event, setter, minValue, maxValue)
   }
 
-  // Handle touch move (swipe gesture)
-  const handleBarTouchMove = (
-    e: React.TouchEvent<HTMLDivElement>,
-    setter: (value: number) => void,
-    minValue: number,
-    maxValue: number
-  ) => {
-    e.preventDefault()
-    const rect = e.currentTarget.getBoundingClientRect()
-    const newValue = calculateBarValue(e.touches[0].clientY, rect, minValue, maxValue)
-    setter(newValue)
+  const bars = [
+    { label: '808 nm', value: nm808Power, setValue: setNm808Power, min: 0, max: 100, unit: '%', color: 'claret' },
+    { label: '980 nm', value: nm980Power, setValue: setNm980Power, min: 0, max: 100, unit: '%', color: 'red' },
+    { label: '1064 nm', value: nm1064Power, setValue: setNm1064Power, min: 0, max: 100, unit: '%', color: 'orange' },
+  ]
+
+  const modeLabels: Record<TreatmentMode, ReactNode> = {
+    auto: t('laserTreatment.treatmentMode.auto'),
+    'semi-auto': <>Semi<br />Auto</>,
+    manual: t('laserTreatment.treatmentMode.manual'),
   }
 
   return (
     <div className="laser-treatment-screen">
       <div className="laser-treatment-screen__background" />
       <BackButton />
-      
+
       <div className="laser-treatment-screen__content">
         <h1 className="laser-treatment-screen__title">{t('laserTreatment.title')}</h1>
-        
-        {/* Settings Display Row */}
+
         <div className="laser-treatment-screen__settings-row">
-          <div className="laser-treatment-screen__setting">
-            <span className="laser-treatment-screen__setting-label">{t('laserTreatment.fpSkinType')}:</span>
-            {isAdjusting ? (
-              <img src="/assets/ss.png" alt="Adjusting" className="laser-treatment-screen__setting-icon" />
-            ) : (
-              <span className="laser-treatment-screen__setting-value">{getSkinTypeLabel()}</span>
-            )}
-          </div>
-          <div className="laser-treatment-screen__setting">
-            <span className="laser-treatment-screen__setting-label">{t('laserTreatment.hairColor')}:</span>
-            {isAdjusting ? (
-              <img src="/assets/ss.png" alt="Adjusting" className="laser-treatment-screen__setting-icon" />
-            ) : (
-              <span className="laser-treatment-screen__setting-value">{getHairColorLabel()}</span>
-            )}
-          </div>
-          <div className="laser-treatment-screen__setting">
-            <span className="laser-treatment-screen__setting-label">{t('laserTreatment.hairType')}:</span>
-            {isAdjusting ? (
-              <img src="/assets/ss.png" alt="Adjusting" className="laser-treatment-screen__setting-icon" />
-            ) : (
-              <span className="laser-treatment-screen__setting-value">{getHairTypeLabel()}</span>
-            )}
-          </div>
+          <span>Skin type: {getSkinTypeLabel()}.</span>
+          <span>{t('laserTreatment.hairColor')}: {getHairColorLabel()}</span>
+          <span>{t('laserTreatment.hairType')}: {getHairTypeLabel()}</span>
         </div>
 
-        {/* Output Performance Section */}
-        <div className="laser-treatment-screen__output-performance">
-          <h3 className="laser-treatment-screen__section-title">{t('laserTreatment.outputPerformance.title')}</h3>
-          
-          <div className="laser-treatment-screen__performance-content">
-            {/* Laser bars - Two groups */}
-            <div className="laser-treatment-screen__laser-bars">
-              {/* Left group: 808nm, 980nm, 1064nm */}
+        <section className="laser-treatment-screen__output-performance">
+          <h2 className="laser-treatment-screen__section-title">{t('laserTreatment.outputPerformance.title')}</h2>
+          <div className="laser-treatment-screen__performance-grid">
+            <div className="laser-treatment-screen__scale laser-treatment-screen__scale--left">
+              <span>100%</span>
+              <span>0%</span>
+            </div>
 
-              <div className="laser-treatment-screen__laser-group">
-                {/* Left scale with labels */}
-                <div className="laser-treatment-screen__scale-container laser-treatment-screen__scale-container--left">
-                  <div className="laser-treatment-screen__scale-labels">
-                    <div className="laser-treatment-screen__scale-label laser-treatment-screen__scale-label--top">15W</div>
-                    <div className="laser-treatment-screen__scale-label laser-treatment-screen__scale-label--bottom">0W</div>
-                  </div>
-                  <img 
-                    src="/assets/merosav-2.png" 
-                    alt="Scale" 
-                    className="laser-treatment-screen__scale laser-treatment-screen__scale--left"
-                  />
+            {bars.map((bar) => (
+              <div className="laser-treatment-screen__bar-container" key={bar.label}>
+                <div className="laser-treatment-screen__bar-label">{bar.label}</div>
+                <div
+                  className="laser-treatment-screen__bar"
+                  role="slider"
+                  aria-label={`${bar.label} power`}
+                  aria-valuemin={bar.min}
+                  aria-valuemax={bar.max}
+                  aria-valuenow={bar.value}
+                  tabIndex={0}
+                  onPointerDown={(event) => startBarDrag(event, bar.setValue, bar.min, bar.max)}
+                  onPointerMove={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      updateBarFromPointer(event, bar.setValue, bar.min, bar.max)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowUp') bar.setValue(Math.min(bar.max, bar.value + 1))
+                    if (event.key === 'ArrowDown') bar.setValue(Math.max(bar.min, bar.value - 1))
+                  }}
+                >
+                  <div className={`laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--${bar.color}`} style={{ height: `${(bar.value / bar.max) * 100}%` }} />
                 </div>
-                  {/* 808 nm */}
-                  <div className="laser-treatment-screen__bar-container laser-treatment-screen__scale-container--margin-right">
-                    <div className="laser-treatment-screen__bar-label">808 nm</div>
-                    <div 
-                      className="laser-treatment-screen__bar-wrapper"
-                      onClick={(e) => handleBarClick(e, setNm808Power, 0, 15)}
-                      onTouchStart={(e) => handleBarTouchStart(e, setNm808Power, 0, 15)}
-                      onTouchMove={(e) => handleBarTouchMove(e, setNm808Power, 0, 15)}
-                    >
-                      <div className="laser-treatment-screen__bar">
-                        <div 
-                          className="laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--claret"
-                          style={{ height: `${(nm808Power / 15) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="laser-treatment-screen__bar-value">{nm808Power}W</div>
-                  </div>
-                {/* </div> */}
-
-                {/* 980 nm */}
-                <div className="laser-treatment-screen__bar-container laser-treatment-screen__scale-container--margin-right">
-                  <div className="laser-treatment-screen__bar-label">980 nm</div>
-                  <div 
-                    className="laser-treatment-screen__bar-wrapper"
-                    onClick={(e) => handleBarClick(e, setNm980Power, 0, 15)}
-                    onTouchStart={(e) => handleBarTouchStart(e, setNm980Power, 0, 15)}
-                    onTouchMove={(e) => handleBarTouchMove(e, setNm980Power, 0, 15)}
-                  >
-                    <div className="laser-treatment-screen__bar">
-                      <div 
-                        className="laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--red"
-                        style={{ height: `${(nm980Power / 15) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="laser-treatment-screen__bar-value">{nm980Power}W</div>
-                </div>
-
-                {/* 1064 nm */}
-                <div className="laser-treatment-screen__bar-container laser-treatment-screen__scale-container--margin-right">
-                  <div className="laser-treatment-screen__bar-label">1064 nm</div>
-                  <div 
-                    className="laser-treatment-screen__bar-wrapper"
-                    onClick={(e) => handleBarClick(e, setNm1064Power, 0, 15)}
-                    onTouchStart={(e) => handleBarTouchStart(e, setNm1064Power, 0, 15)}
-                    onTouchMove={(e) => handleBarTouchMove(e, setNm1064Power, 0, 15)}
-                  >
-                    <div className="laser-treatment-screen__bar">
-                      <div 
-                        className="laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--orange"
-                        style={{ height: `${(nm1064Power / 15) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="laser-treatment-screen__bar-value">{nm1064Power}W</div>
-                </div>
+                <div className="laser-treatment-screen__bar-value">{bar.value}{bar.unit}</div>
               </div>
+            ))}
 
-              {/* Right group: P.WIDTH */}
-              <div className="laser-treatment-screen__laser-group">
-                {/* Pulse Width */}
-                <div className="laser-treatment-screen__bar-container">
-                  <div className="laser-treatment-screen__bar-label">P.WIDTH</div>
-                  <div 
-                    className="laser-treatment-screen__bar-wrapper"
-                    onClick={(e) => handleBarClick(e, setPulseWidth, 10, 110)}
-                    onTouchStart={(e) => handleBarTouchStart(e, setPulseWidth, 10, 110)}
-                    onTouchMove={(e) => handleBarTouchMove(e, setPulseWidth, 10, 110)}
-                  >
-                    <div className="laser-treatment-screen__bar">
-                      <div 
-                        className="laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--blue"
-                        style={{ height: `${(pulseWidth - 10)}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="laser-treatment-screen__bar-value">{pulseWidth}W</div>
-                </div>
-                
-                {/* Right scale with labels (mirrored) */}
-                <div className="laser-treatment-screen__scale-container laser-treatment-screen__scale-container--right">
-                  <img
-                    src="/assets/merosav-2.png" 
-                    alt="Scale" 
-                    className="laser-treatment-screen__scale laser-treatment-screen__scale--right"
-                  />
-                  <div className="laser-treatment-screen__scale-labels">
-                    <div className="laser-treatment-screen__scale-label laser-treatment-screen__scale-label--top">110ms</div>
-                    <div className="laser-treatment-screen__scale-label laser-treatment-screen__scale-label--bottom">10ms</div>
-                  </div>
-                </div>
+            <div className="laser-treatment-screen__red-dot">
+              <span>RED DOT</span>
+              <div className="laser-treatment-screen__segmented">
+                <button className={redDot ? 'is-active' : ''} onClick={() => handleRedDotChange(true)}>ON</button>
+                <button className={!redDot ? 'is-active' : ''} onClick={() => handleRedDotChange(false)}>OFF</button>
               </div>
             </div>
 
-            {/* Total Output Power */}
-            <div className="laser-treatment-screen__total-power">
-              <span className="laser-treatment-screen__total-power-label">{t('laserTreatment.outputPerformance.totalOutputPower')}:</span>
-              <span className="laser-treatment-screen__total-power-value">{totalOutputPower} J/cm2</span>
+            <div className="laser-treatment-screen__bar-container laser-treatment-screen__bar-container--pulse">
+              <div className="laser-treatment-screen__bar-label">P.WIDTH</div>
+              <div
+                className="laser-treatment-screen__bar"
+                role="slider"
+                aria-label="Pulse width"
+                aria-valuemin={10}
+                aria-valuemax={1000}
+                aria-valuenow={pulseWidth}
+                tabIndex={0}
+                onPointerDown={(event) => startBarDrag(event, setPulseWidth, 10, 1000)}
+                onPointerMove={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    updateBarFromPointer(event, setPulseWidth, 10, 1000)
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp') setPulseWidth(Math.min(1000, pulseWidth + 10))
+                  if (event.key === 'ArrowDown') setPulseWidth(Math.max(10, pulseWidth - 10))
+                }}
+              >
+                <div className="laser-treatment-screen__bar-fill laser-treatment-screen__bar-fill--blue" style={{ height: `${((pulseWidth - 10) / 990) * 100}%` }} />
+              </div>
+              <div className="laser-treatment-screen__bar-value">{pulseWidth}ms</div>
+            </div>
+
+            <div className="laser-treatment-screen__scale laser-treatment-screen__scale--right">
+              <span>1000ms</span>
+              <span>10ms</span>
             </div>
           </div>
-        </div>
+          <div className="laser-treatment-screen__total-power">
+            <span>{t('laserTreatment.outputPerformance.totalOutputPower')}:</span>
+            <span>{totalOutputPower}%</span>
+          </div>
+        </section>
 
-        {/* Treatment Mode Section */}
-        <div className="laser-treatment-screen__treatment-mode">
-          <h3 style={{marginBottom: 0}} className="laser-treatment-screen__section-title">{t('laserTreatment.treatmentMode.title')}</h3>
-          
+        <section className="laser-treatment-screen__treatment-mode">
+          <h2 className="laser-treatment-screen__section-title">{t('laserTreatment.treatmentMode.title')}</h2>
           <div className="laser-treatment-screen__mode-buttons">
-            <button
-              className={`laser-treatment-screen__mode-button ${
-                treatmentMode === 'auto' ? 'laser-treatment-screen__mode-button--active' : ''
-              }`}
-              onClick={() => setTreatmentMode('auto')}
-            >
-              <span>{t('laserTreatment.treatmentMode.auto')}</span>
-            </button>
-            <button
-              className={`laser-treatment-screen__mode-button ${
-                treatmentMode === 'semi-auto' ? 'laser-treatment-screen__mode-button--active' : ''
-              }`}
-              onClick={() => setTreatmentMode('semi-auto')}
-            >
-              <span dangerouslySetInnerHTML={{ __html: t('laserTreatment.treatmentMode.semiAuto').replace(' ', '<br/>') }} />
-            </button>
-            <button
-              className={`laser-treatment-screen__mode-button ${
-                treatmentMode === 'manual' ? 'laser-treatment-screen__mode-button--active' : ''
-              }`}
-              onClick={() => setTreatmentMode('manual')}
-            >
-              <span>{t('laserTreatment.treatmentMode.manual')}</span>
-            </button>
+            {(['auto', 'semi-auto', 'manual'] as TreatmentMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={`laser-treatment-screen__mode-button ${treatmentMode === mode ? 'laser-treatment-screen__mode-button--active' : ''}`}
+                onClick={() => handleModeChange(mode)}
+              >
+                <span>{modeLabels[mode]}</span>
+              </button>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {/* Laser Module Temperature */}
         <div className="laser-treatment-screen__laser-temp">
-          <span className="laser-treatment-screen__laser-temp-label">{t('laserTreatment.laserModuleTemp')}:</span>
-          <span className="laser-treatment-screen__laser-temp-value">{laserTemp}°C</span>
+          {t('laserTreatment.laserModuleTemp')}: <span>{laserTemp.toFixed(1)}°C</span>
         </div>
 
-        {/* Standby/Ready Button */}
-        <button
-          className={`laser-treatment-screen__standby-button ${
-            laserState === 'ready' ? 'laser-treatment-screen__standby-button--ready' : ''
-          }`}
-          onClick={handleStandbyToggle}
-        >
-          {laserState === 'standby' ? t('laserTreatment.standby') : t('laserTreatment.ready')}
+        <button className={`laser-treatment-screen__arm-button laser-treatment-screen__arm-button--${laserState}`} onClick={handleArmToggle} disabled={isBusy}>
+          {laserState === 'standby' ? 'ARM' : 'DISARM'}
         </button>
 
-        {/* Camera and Status Section */}
-        <div className="laser-treatment-screen__camera-section">
+        <section className={`laser-treatment-screen__camera-section ${laserState === 'ready' ? 'laser-treatment-screen__camera-section--ready' : ''}`}>
           <div className="laser-treatment-screen__camera-container">
-            {cameraActive ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="laser-treatment-screen__camera-feed"
-              />
-            ) : (
-              <div className="laser-treatment-screen__camera-placeholder" />
-            )}
+            <img src={hairKillerApi.getFrameUrl()} alt="Treatment camera stream" className="laser-treatment-screen__camera-feed" />
           </div>
 
-          <div className="laser-treatment-screen__status">
-            <div className="laser-treatment-screen__status-item">
-              <span className="laser-treatment-screen__status-label">{t('laserTreatment.vacuumLock')}:</span>
-              <span className={`laser-treatment-screen__status-value ${
-                vacuumLock ? 'laser-treatment-screen__status-value--ok' : 'laser-treatment-screen__status-value--no'
-              }`}>
-                {vacuumLock ? t('laserTreatment.status.ok') : t('laserTreatment.status.no')}
-              </span>
+          <div className="laser-treatment-screen__status-panel">
+            <div className="laser-treatment-screen__toggle-row">
+              <span>VACUUM:</span>
+              <div className="laser-treatment-screen__segmented laser-treatment-screen__segmented--small">
+                <button className={vacuumEnabled ? 'is-active' : ''} onClick={() => handleVacuumEnabledChange(true)}>ON</button>
+                <button className={!vacuumEnabled ? 'is-active' : ''} onClick={() => handleVacuumEnabledChange(false)}>OFF</button>
+              </div>
             </div>
-            <div className="laser-treatment-screen__status-item">
-              <span className="laser-treatment-screen__status-label">{t('laserTreatment.target')}:</span>
-              <span className={`laser-treatment-screen__status-value ${
-                target ? 'laser-treatment-screen__status-value--ok' : 'laser-treatment-screen__status-value--no'
-              }`}>
-                {target ? t('laserTreatment.status.ok') : t('laserTreatment.status.no')}
-              </span>
+            <div className="laser-treatment-screen__toggle-row">
+              <span>{t('laserTreatment.vacuumLock')}:</span>
+              <div className="laser-treatment-screen__segmented laser-treatment-screen__segmented--small">
+                <button className={vacuumLock ? 'is-active' : ''} onClick={() => handleVacuumLockChange(true)}>ON</button>
+                <button className={!vacuumLock ? 'is-active' : ''} onClick={() => handleVacuumLockChange(false)}>OFF</button>
+              </div>
+            </div>
+            <label className="laser-treatment-screen__confidence">
+              <span>SENSITIVITY: {confidence.toFixed(2)}</span>
+              <input type="range" min="1" max="100" value={Math.round(confidence * 100)} onChange={(event) => handleConfidenceChange(Number(event.target.value))} />
+            </label>
+            <button className="laser-treatment-screen__fire-button" onClick={handleFire} disabled={isBusy}>FIRE</button>
+            <div className="laser-treatment-screen__target-state">
+              <span>{t('laserTreatment.target')}: <strong className={target ? 'is-ok' : 'is-no'}>{target ? 'OK' : 'NO'}</strong></span>
+              <small>{t('laserTreatment.targetedFollicles')}: {targetedFollicles}</small>
+              <small className="laser-treatment-screen__api-status">{apiStatus}</small>
             </div>
           </div>
-
-          <div className="laser-treatment-screen__follicles">
-            <span className="laser-treatment-screen__follicles-label">{t('laserTreatment.targetedFollicles')}:</span>
-            <span className="laser-treatment-screen__follicles-value">{targetedFollicles}</span>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   )

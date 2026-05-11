@@ -11,10 +11,11 @@ const SettingsScreen: React.FC = () => {
   const { t } = useTranslation()
   const dispatch = useAppDispatch()
   
-  const [laserPower, setLaserPower] = useState(80)
-  const [opticalScan, setOpticalScan] = useState(0)
+  const [step, setStep] = useState<'calibration' | 'settings'>('calibration')
+  const [laserPower] = useState(80)
+  const [opticalScan] = useState(0)
   const [selectedSkinType, setSelectedSkinType] = useState(3)
-  const [selectedHairColor, setSelectedHairColor] = useState('blonde')
+  const [selectedHairColor, setSelectedHairColor] = useState('dark-brown')
   const [selectedHairType, setSelectedHairType] = useState('medium')
   const [temperature] = useState(21)
 
@@ -38,11 +39,11 @@ const SettingsScreen: React.FC = () => {
   ]
 
   const hairColors = [
-    { id: 'greyWhite', label: t('settings.hairColor.greyWhite'), image: '/assets/haircolors/n.png', disabled: true },
+    { id: 'grey-white', label: t('settings.hairColor.greyWhite'), image: '/assets/haircolors/n.png', disabled: true },
     { id: 'red', label: t('settings.hairColor.red'), image: '/assets/haircolors/h.png', disabled: true },
     { id: 'blonde', label: t('settings.hairColor.blonde'), image: '/assets/haircolors/dd.png', disabled: false },
     { id: 'brown', label: t('settings.hairColor.brown'), image: '/assets/haircolors/vv.png', disabled: false },
-    { id: 'darkBrown', label: t('settings.hairColor.darkBrown'), image: '/assets/haircolors/e.png', disabled: false },
+    { id: 'dark-brown', label: t('settings.hairColor.darkBrown'), image: '/assets/haircolors/e.png', disabled: false },
     { id: 'black', label: t('settings.hairColor.black'), image: '/assets/haircolors/hf.png', disabled: false },
   ]
 
@@ -58,8 +59,7 @@ const SettingsScreen: React.FC = () => {
       <InfoButton />
       <BackButton />
       
-      <div className="settings-screen__content">
-        {/* Calibration Section */}
+      <div className={`settings-screen__content settings-screen__content--${step}`}>
         <div className="settings-screen__calibration">
           <h2 className="settings-screen__calibration-title">{t('settings.calibration.title')}</h2>
           <img 
@@ -67,134 +67,108 @@ const SettingsScreen: React.FC = () => {
             alt="Calibration Device" 
             className="settings-screen__calibration-device"
           />
-          
-          <div className="settings-screen__calibration-controls">
-            <div className="settings-screen__slider-group">
-              <div className="settings-screen__slider-container">
-                <label className="settings-screen__slider-label">{t('settings.calibration.laserPower')}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={laserPower}
-                  onChange={(e) => setLaserPower(Number(e.target.value))}
-                  className="settings-screen__slider settings-screen__slider--active"
-                />
-                <div className="settings-screen__slider-fill" style={{ width: `${laserPower}%` }} />
+          {step === 'calibration' ? (
+            <div className="settings-screen__calibration-controls">
+              <div className="settings-screen__slider-group">
+                <div className="settings-screen__slider-container">
+                  <span className="settings-screen__slider-label">{t('settings.calibration.laserPower')}</span>
+                  <div className="settings-screen__slider-fill" style={{ width: `${laserPower}%` }} />
+                </div>
+                <span className="settings-screen__slider-value">{laserPower}%</span>
               </div>
-              <span className="settings-screen__slider-value">{laserPower}%</span>
-            </div>
-
-            <div className="settings-screen__empty-space"></div>
-            
-            <div className="settings-screen__slider-group">
-              <div className="settings-screen__slider-container">
-                <label className="settings-screen__slider-label">{t('settings.calibration.opticalScan')}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={opticalScan}
-                  onChange={(e) => setOpticalScan(Number(e.target.value))}
-                  className="settings-screen__slider"
-                />
-                <div className="settings-screen__slider-fill settings-screen__slider-fill--active" style={{ width: `${opticalScan}%` }} />
+              <div className="settings-screen__slider-group">
+                <div className="settings-screen__slider-container">
+                  <span className="settings-screen__slider-label">{t('settings.calibration.opticalScan')}</span>
+                  <div className="settings-screen__slider-fill settings-screen__slider-fill--inactive" style={{ width: `${opticalScan}%` }} />
+                </div>
+                <span className="settings-screen__slider-value">{opticalScan}%</span>
               </div>
-              <span className="settings-screen__slider-value">{opticalScan}%</span>
+              <div className="settings-screen__temperature">
+                {t('settings.calibration.temperature')} <span className="settings-screen__temperature-ok">OK</span>
+              </div>
             </div>
-            
-            <div className="settings-screen__temperature">
-              {t('settings.calibration.temperature')}: <span className="settings-screen__temperature-ok">OK</span>
+          ) : (
+            <div className="settings-screen__recalibration">
+              <button className="settings-screen__recalibration-button" onClick={() => setStep('calibration')}>
+                Recalibration
+              </button>
+              <div className="settings-screen__temperature">
+                {t('settings.calibration.temperature')} <span className="settings-screen__temperature-ok">OK</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Settings Title */}
         <h1 className="settings-screen__title">{t('settings.title')}</h1>
 
-        {/* Fitzpatrick Skin Type */}
-        <div className="settings-screen__section">
-          <h3 className="settings-screen__section-title">{t('settings.skinType.title')}</h3>
-          <div className="settings-screen__skin-types">
-            {skinTypes.map((type) => (
-              <div
-                key={type.id}
-                className={`settings-screen__skin-type ${
-                  selectedSkinType === type.id ? 'settings-screen__skin-type--selected' : ''
-                }`}
-                onClick={() => setSelectedSkinType(type.id)}
-              >
-                <div
-                  className="settings-screen__skin-type-circle"
-                  style={{ backgroundColor: type.color }}
-                />
-                <span className="settings-screen__skin-type-label">{type.label}</span>
-              </div>
-            ))}
+        {step === 'calibration' ? (
+          <div className="settings-screen__optical-section">
+            <h3 className="settings-screen__section-title">Optical Calibration</h3>
+            <img src="/assets/scan-target.webp" alt="Optical calibration target" className="settings-screen__scan-target" />
           </div>
-        </div>
-
-        {/* Hair Color */}
-        <div className="settings-screen__section">
-          <h3 className="settings-screen__section-title">{t('settings.hairColor.title')}</h3>
-          <div className="settings-screen__hair-colors">
-            {hairColors.map((color) => (
-              <div
-                key={color.id}
-                className={`settings-screen__hair-color ${
-                  selectedHairColor === color.id ? 'settings-screen__hair-color--selected' : ''
-                } ${
-                  color.disabled ? 'settings-screen__hair-color--disabled' : ''
-                }`}
-                onClick={() => !color.disabled && setSelectedHairColor(color.id)}
-              >
-                <div className="settings-screen__hair-color-circle">
-                  <img 
-                    src={color.image} 
-                    alt={color.label}
-                    className="settings-screen__hair-color-image"
-                  />
-                  {color.disabled && <div className="settings-screen__hair-color-blocked" />}
-                </div>
-                <span className="settings-screen__hair-color-label">{color.label}</span>
+        ) : (
+          <>
+            <div className="settings-screen__section">
+              <h3 className="settings-screen__section-title">Skin Type</h3>
+              <div className="settings-screen__skin-types">
+                {skinTypes.map((type) => (
+                  <div
+                    key={type.id}
+                    className={`settings-screen__skin-type ${selectedSkinType === type.id ? 'settings-screen__skin-type--selected' : ''}`}
+                    onClick={() => setSelectedSkinType(type.id)}
+                  >
+                    <div className="settings-screen__skin-type-circle" style={{ backgroundColor: type.color }} />
+                    <span className="settings-screen__skin-type-label">{type.label}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Hair Type */}
-        <div className="settings-screen__section">
-          <h3 className="settings-screen__section-title">{t('settings.hairType.title')}</h3>
-          <div className="settings-screen__hair-types">
-            {hairTypes.map((type) => (
-              <div
-                key={type.id}
-                className={`settings-screen__hair-type ${
-                  selectedHairType === type.id ? 'settings-screen__hair-type--selected' : ''
-                }`}
-                onClick={() => setSelectedHairType(type.id)}
-              >
-                <div className="settings-screen__hair-type-icon">
-                  <img 
-                    src={type.image} 
-                    alt={type.label}
-                    className="settings-screen__hair-type-image"
-                  />
-                </div>
-                <span className="settings-screen__hair-type-label">{type.label}</span>
+            <div className="settings-screen__section">
+              <h3 className="settings-screen__section-title">{t('settings.hairColor.title')}</h3>
+              <div className="settings-screen__hair-colors">
+                {hairColors.map((color) => (
+                  <div
+                    key={color.id}
+                    className={`settings-screen__hair-color ${selectedHairColor === color.id ? 'settings-screen__hair-color--selected' : ''} ${color.disabled ? 'settings-screen__hair-color--disabled' : ''}`}
+                    onClick={() => !color.disabled && setSelectedHairColor(color.id)}
+                  >
+                    <div className="settings-screen__hair-color-circle">
+                      <img src={color.image} alt={color.label} className="settings-screen__hair-color-image" />
+                      {color.disabled && <div className="settings-screen__hair-color-blocked" />}
+                    </div>
+                    <span className="settings-screen__hair-color-label">{color.label}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Laser Module Temperature */}
+            <div className="settings-screen__section">
+              <h3 className="settings-screen__section-title">{t('settings.hairType.title')}</h3>
+              <div className="settings-screen__hair-types">
+                {hairTypes.map((type) => (
+                  <div
+                    key={type.id}
+                    className={`settings-screen__hair-type ${selectedHairType === type.id ? 'settings-screen__hair-type--selected' : ''}`}
+                    onClick={() => setSelectedHairType(type.id)}
+                  >
+                    <div className="settings-screen__hair-type-icon">
+                      <img src={type.image} alt={type.label} className="settings-screen__hair-type-image" />
+                    </div>
+                    <span className="settings-screen__hair-type-label">{type.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="settings-screen__laser-temp">
           {t('settings.laserModuleTemp')}: <span className="settings-screen__laser-temp-value">{temperature}°C</span>
         </div>
 
-        {/* Start Button */}
-        <button className="settings-screen__start-button" onClick={handleStart}>
-          {t('common.start')}
+        <button className={`settings-screen__start-button settings-screen__start-button--${step}`} onClick={step === 'calibration' ? () => setStep('settings') : handleStart}>
+          {step === 'calibration' ? 'Start calibration' : 'Start treatment'}
         </button>
       </div>
     </div>

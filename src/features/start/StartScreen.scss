@@ -4,16 +4,7 @@
   @include screen-container;
 
   &__background {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 1244px;
-    height: 2097px;
-    background-image: url('/assets/Background.png');
-    background-size: 1244px 2097px;
-    background-position: top left;
-    background-repeat: no-repeat;
-    z-index: 0;
+    @include ultima-background(48% center);
   }
 
   &__content {
@@ -27,10 +18,10 @@
 
   &__logo {
     position: absolute;
-    top: 249px;
+    top: 250px;
     left: 204px;
-    width: 673px;
-    height: 787px;
+    width: 672px;
+    height: 788px;
   }
 
   &__logo-image {
@@ -41,9 +32,9 @@
 
   &__text {
     position: absolute;
-    top: 1252px;
-    left: 204px;
-    width: 673px;
+    top: 1257px;
+    left: 197px;
+    width: 686px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -61,9 +52,11 @@
 
   &__button {
     @include button-rounded(6px, $color-white, $color-white);
-    @include button-shadow-effect;
+    @include glass-button-shine;
     align-self: center;
-    padding: 14px 118px;
+    width: 368px;
+    height: 70px;
+    margin-top: 18px;
     font-size: 22px;
     font-weight: $font-weight-normal;
     letter-spacing: 0.5px;
