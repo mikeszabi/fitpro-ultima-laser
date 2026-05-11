@@ -7,25 +7,25 @@ This document describes how the FitPro Ultima Laser Treatment panel talks to the
 Frontend repository:
 
 ```bash
-/home/mike/Projects/fitpro-ultima-laser
+~/Projects/fitpro-ultima-laser
 ```
 
 Backend repository:
 
 ```bash
-/home/mike/Projects/hairkiller
+~/Projects/hairkiller
 ```
 
 Backend API reference:
 
 ```bash
-/home/mike/Projects/hairkiller/docs/hk_full_app_api.md
+~/Projects/hairkiller/docs/hk_full_app_api.md
 ```
 
 Mock backend implementation:
 
 ```bash
-/home/mike/Projects/hairkiller/app/hk_full_app_mock.py
+~/Projects/hairkiller/app/hk_full_app_mock.py
 ```
 
 ## Runtime Ports
@@ -151,6 +151,7 @@ Connection and status:
 GET  /health
 GET  /stats
 GET  /laser/settings
+GET  /laser/temp
 GET  /detection/status
 GET  /sse/detection
 GET  /frame/current
@@ -330,10 +331,6 @@ The frontend combines:
 ```
 
 `targets_count` is the count that matters for firing an already loaded target sequence.
-
-Temperature:
-
-The Treatment page currently displays a fixed fallback temperature and does not poll `/laser/temp` or `/sensors/values` by default. This avoids a known mock-backend crash when `SENSOR_FIELDS` is imported as metadata dictionaries instead of plain field-name strings.
 
 ## Error Handling
 
