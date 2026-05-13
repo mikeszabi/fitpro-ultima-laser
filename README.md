@@ -61,6 +61,52 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build
 ```
 
+## Deploy
+
+Builds the project and copies `dist/` to `/var/www/frontend`:
+
+```bash
+npm run deploy
+```
+
+> Note: `/var/www/frontend` must be writable by your user, or run with `sudo`.
+
+### Nginx Configuration
+
+| Config file | Target folder | Port |
+|---|---|---|
+| `deploy/frontend.nginx` | `/var/www/frontend` | 80 |
+| `deploy/test-frontend.nginx` | `/var/www/test-frontend` | 8080 |
+
+Install production frontend:
+
+```bash
+sudo cp deploy/frontend.nginx /etc/nginx/sites-available/frontend
+sudo ln -s /etc/nginx/sites-available/frontend /etc/nginx/sites-enabled/frontend
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Backend (Hairkiller)
+
+The backend is a FastAPI/uvicorn service managed by systemd. The service file is at `deploy/hairkiller-backend.service`.
+
+```bash
+# Install (first time)
+sudo cp deploy/hairkiller-backend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable hairkiller-backend
+
+# Start / Stop / Restart
+sudo systemctl start hairkiller-backend
+sudo systemctl stop hairkiller-backend
+sudo systemctl restart hairkiller-backend
+
+# Status & logs
+sudo systemctl status hairkiller-backend
+sudo journalctl -u hairkiller-backend -f
+```
+
 ## Mock Services
 
 All backend interactions are mocked:
@@ -115,6 +161,13 @@ Redux Toolkit slices:
 ### Modals
 - **GUIUpdateModal** - Software update notification and confirmation
 - **ErrorModal** - Error message display with auto-dismiss
+
+## Hacks
+
+```sh
+gsettings set org.gnome.desktop.notifications show-banners false
+```
+^-> this one will hide desktop popups for "system throttled due to over-current" warning -> yolo model start drains too much power, should be sorted out
 
 ## License
 

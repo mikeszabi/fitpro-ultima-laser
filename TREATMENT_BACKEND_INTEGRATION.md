@@ -19,7 +19,7 @@ Backend repository:
 Backend API reference:
 
 ```bash
-~/Projects/hairkiller/docs/hk_full_app_api.md
+~/Projects/hairkiller/docs/hk_backend_app_api.md
 ```
 
 Mock backend implementation:
@@ -223,19 +223,20 @@ Frontend flow:
 User intent:
 
 ```text
-Vacuum closes, targets are detected and loaded, but firing waits for the FIRE button or physical trigger.
+Targets are detected and loaded automatically, but firing waits for the FIRE button or physical trigger.
 ```
 
 Frontend flow:
 
 1. Enable detection.
-2. Enable backend vacuum safety check.
-3. Set target sequence mode to `auto`.
-4. When `VACUUM LOCK` is turned on:
-   - call `/detection/capture`
-   - call `/seq/update_targets`
-   - call `/seq/show_targets?enabled=true`
-5. When `FIRE` is pressed:
+2. Ignore vacuum and do not check vacuum lock.
+3. Stop any previous target sequence.
+4. Clear any previous errors.
+5. Set target sequence mode to `auto`.
+6. Call `/detection/capture`.
+7. Call `/seq/update_targets`.
+8. Call `/seq/show_targets?enabled=true`.
+9. When `FIRE` is pressed:
    - ensure laser settings are synced and armed
    - call `/seq/start`
 
