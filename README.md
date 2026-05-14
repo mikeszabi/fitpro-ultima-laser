@@ -107,6 +107,22 @@ sudo systemctl status hairkiller-backend
 sudo journalctl -u hairkiller-backend -f
 ```
 
+### Serial Port Setup
+
+To access the laser device on `/dev/ttyACM0`, run the setup script from the hairkiller project:
+
+```bash
+cd /home/jetson/Projects/hairkiller/setup_scripts
+./setup_serial.sh
+```
+
+This script:
+- Changes ownership of the STM32 Virtual ComPort device to the current user
+- Adds the user to the `dialout` group for serial port access
+- Sets proper permissions (660) on `/dev/ttyACM0`
+
+**Note:** You may need to log out and log back in for group changes to take effect.
+
 ## Mock Services
 
 All backend interactions are mocked:
