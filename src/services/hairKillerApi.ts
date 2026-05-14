@@ -51,8 +51,16 @@ interface SensorValuesResponse {
 }
 
 interface SequenceStatusResponse {
+  state?: string | string[]
+  mode?: string | string[]
+  last_error?: string | string[]
   target_count: number
   show_target_points_overlay: boolean
+  events?: {
+    status?: string
+    message?: string
+    timestamp?: number
+  }[]
 }
 
 const buildUrl = (path: string, query?: Record<string, QueryValue>) => {
@@ -161,12 +169,20 @@ export const hairKillerApi = {
     return post<{ targets_count: number }>('/seq/step')
   },
 
+  getSequenceStatus() {
+    return request<SequenceStatusResponse>('/seq/status')
+  },
+
   fireWalk() {
     return post<{ targets_count: number; status: string }>('/fire/walk')
   },
 
   stopSequence() {
     return post<{ targets_count: number }>('/seq/stop')
+  },
+
+  clearAppError() {
+    return post<{ response: string[] }>('/app/clear_error')
   },
 
   armLaser(enabled: boolean) {

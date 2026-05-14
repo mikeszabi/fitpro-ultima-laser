@@ -10,6 +10,14 @@ import './LaserTreatmentScreen.scss'
 
 type LaserRunState = 'standby' | 'ready'
 
+const SEQUENCE_POLL_MS = 250
+const MIN_SEQUENCE_CLEANUP_WAIT_MS = 5000
+const MAX_SEQUENCE_CLEANUP_WAIT_MS = 45000
+
+const stringifyBackendValue = (value: unknown) => (
+  Array.isArray(value) ? value.join(' ') : String(value || '')
+)
+
 const LaserTreatmentScreen: React.FC = () => {
   const { t } = useTranslation()
   const dispatch = useAppDispatch()
@@ -67,7 +75,7 @@ const LaserTreatmentScreen: React.FC = () => {
         hairKillerApi.getStats(),
       ])
 
-      setLaserState(laserSettings.armed ? 'ready' : 'standby')
+      setLaserState('standby')
       setNm808Power(laserSettings.power.p808)
       setNm980Power(laserSettings.power.p980)
       setNm1064Power(laserSettings.power.p1064)
@@ -131,7 +139,7 @@ const LaserTreatmentScreen: React.FC = () => {
         p980: nm980Power,
         p1064: nm1064Power,
         pulse_ms: pulseWidth,
-        reload_targets: true,
+        reload_targets: false,
       }).catch((error) => showBackendError('Laser settings', error))
     }, 350)
 
@@ -168,10 +176,60 @@ const LaserTreatmentScreen: React.FC = () => {
     await hairKillerApi.startSequence()
   }, [treatmentMode])
 
+  const cleanupFinishedSequence = useCallback(async () => {
+    try {
+      await hairKillerApi.stopSequence()
+    } finally {
+      await hairKillerApi.clearAppError()
+    }
+  }, [])
+
+  const waitForSequenceDone = useCallback(async (startedAt: number, targetsCount: number) => {
+    const waitMs = Math.min(
+      MAX_SEQUENCE_CLEANUP_WAIT_MS,
+      Math.max(MIN_SEQUENCE_CLEANUP_WAIT_MS, targetsCount * (pulseWidth + 250) + 3000),
+    )
+    const deadline = Date.now() + waitMs
+
+    while (Date.now() < deadline) {
+      const status = await hairKillerApi.getSequenceStatus()
+      const stateText = stringifyBackendValue(status.state).toUpperCase()
+      const lastEvent = status.events?.find((event) => (
+        typeof event.timestamp === 'number' && event.timestamp >= startedAt - SEQUENCE_POLL_MS
+      ))
+      const eventText = `${lastEvent?.status || ''} ${lastEvent?.message || ''}`.toUpperCase()
+
+      if (
+        lastEvent ||
+        stateText.includes('COMPLETED') ||
+        stateText.includes('ERROR') ||
+        eventText.includes('TARGET_SEQ_FINISHED')
+      ) {
+        return
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, SEQUENCE_POLL_MS))
+    }
+  }, [pulseWidth])
+
+  const fireLoadedSequenceAndCleanup = useCallback(async (targetsCount: number) => {
+    const startedAt = Date.now()
+
+    try {
+      await fireLoadedSequence()
+      await waitForSequenceDone(startedAt, targetsCount)
+    } finally {
+      await cleanupFinishedSequence()
+    }
+  }, [cleanupFinishedSequence, fireLoadedSequence, waitForSequenceDone])
+
   const handleArmToggle = () => {
     const nextReady = laserState === 'standby'
 
     runBackendAction(nextReady ? 'Arm laser' : 'Disarm laser', async () => {
+      if (nextReady) {
+        await hairKillerApi.setDetectionEnabled(true)
+      }
       await hairKillerApi.updateLaserSettings({
         armed: nextReady,
         p808: nm808Power,
@@ -218,7 +276,7 @@ const LaserTreatmentScreen: React.FC = () => {
 
       const targetsCount = await captureAndLoadTargets()
       if (treatmentMode === 'auto' && targetsCount > 0) {
-        await fireLoadedSequence()
+        await fireLoadedSequenceAndCleanup(targetsCount)
       }
     })
   }
@@ -240,15 +298,17 @@ const LaserTreatmentScreen: React.FC = () => {
 
   const handleFire = () => {
     runBackendAction('Fire', async () => {
-      await hairKillerApi.updateLaserSettings({
-        armed: true,
-        p808: nm808Power,
-        p980: nm980Power,
-        p1064: nm1064Power,
-        pulse_ms: pulseWidth,
-        reload_targets: true,
-      })
-      setLaserState('ready')
+      if (laserState !== 'ready') {
+        await hairKillerApi.updateLaserSettings({
+          armed: true,
+          p808: nm808Power,
+          p980: nm980Power,
+          p1064: nm1064Power,
+          pulse_ms: pulseWidth,
+          reload_targets: false,
+        })
+        setLaserState('ready')
+      }
 
       if (treatmentMode === 'manual') {
         let targetsCount = loadedTargetCount
@@ -256,7 +316,7 @@ const LaserTreatmentScreen: React.FC = () => {
           targetsCount = await captureAndLoadTargets()
         }
         if (targetsCount === 0) return
-        await fireLoadedSequence()
+        await fireLoadedSequenceAndCleanup(targetsCount)
         return
       }
 
@@ -266,7 +326,7 @@ const LaserTreatmentScreen: React.FC = () => {
       }
 
       if (targetsCount === 0) return
-      await fireLoadedSequence()
+      await fireLoadedSequenceAndCleanup(targetsCount)
     })
   }
 
