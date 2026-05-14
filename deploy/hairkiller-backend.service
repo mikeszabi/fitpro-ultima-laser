@@ -4,10 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=digdeep
-WorkingDirectory=/home/digdeep/Projects/hairkiller
+User=jetson
+WorkingDirectory=/home/jetson/Projects/hairkiller
 
-ExecStart=/home/digdeep/Projects/hairkiller/yolo_venv/bin/uvicorn backend.hk_backend_app:app --host 127.0.0.1 --port 8000
+ExecStart=/home/jetson/Projects/hairkiller/yolo_venv/bin/uvicorn backend.hk_backend_app:app --host 127.0.0.1 --port 8000
 
-StandardOutput=append:/var/log/hairkiller/backend.log
-StandardError=append:/var/log/hairkiller/backend-error.log
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
