@@ -1,0 +1,13 @@
+DEVICE_LABEL="Hi-Tech CoolTouch System"
+
+echo "waiting for device: $DEVICE_LABEL"
+
+until /usr/bin/xinput list | grep -q "$DEVICE_LABEL"; do
+    sleep 1
+done
+
+DEVICE_ID=$(/usr/bin/xinput list | grep "$DEVICE_LABEL" | sed -n 's/.*id=\([0-9]*\).*/\1/p' | head -n1)
+
+echo "device id: $DEVICE_ID"
+
+/usr/bin/xinput set-prop "$DEVICE_ID" "Coordinate Transformation Matrix" 0 1 0 -1 0 1 0 0 1

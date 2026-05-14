@@ -162,6 +162,16 @@ Redux Toolkit slices:
 - **GUIUpdateModal** - Software update notification and confirmation
 - **ErrorModal** - Error message display with auto-dismiss
 
+## Touchscreen Coordinate Setup
+
+The touchscreen requires coordinate transformation to work correctly. Copy the `.xprofile` configuration to the user's home folder:
+
+```bash
+cp deploy/.xprofile ~/.xprofile
+```
+
+This script waits for the "Hi-Tech CoolTouch System" touchscreen device on startup and applies the coordinate transformation matrix to set proper touch coordinates.
+
 ## Hacks
 
 ```sh
