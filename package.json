@@ -10,7 +10,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "deploy": "npm run build && npm run nginx",
     "nginx": "sudo cp -r dist/. /var/www/frontend",
-    "nginx:test": "sudo cp -r ../hairkiller/app /var/www/test-frontend"
+    "nginx:test": "sudo cp -r ../hairkiller/app/* /var/www/test-frontend"
   },
   "dependencies": {
     "react": "^18.2.0",
