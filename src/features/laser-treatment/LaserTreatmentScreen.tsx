@@ -87,6 +87,9 @@ const LaserTreatmentScreen: React.FC = () => {
 
   useEffect(() => {
     syncBackendState()
+    // Semi-auto temporarily runs without the backend vacuum safety check.
+    hairKillerApi.setVacuumCheckEnabled(false)
+      .catch((error) => showBackendError('Vacuum check', error))
 
     const statsInterval = window.setInterval(async () => {
       try {
@@ -186,10 +189,11 @@ const LaserTreatmentScreen: React.FC = () => {
 
     runBackendAction('Treatment mode', async () => {
       await hairKillerApi.setDetectionEnabled(true)
-      await hairKillerApi.setVacuumCheckEnabled(mode !== 'manual')
+      // Vacuum checks are temporarily disabled for semi-auto so it can run without vacuum.
+      await hairKillerApi.setVacuumCheckEnabled(mode === 'auto')
       await hairKillerApi.setSequenceMode(mode)
 
-      if (mode === 'manual') {
+      if (mode !== 'auto') {
         setVacuumLock(false)
       }
     })
