@@ -41,6 +41,10 @@ src/
 └── types/          # TypeScript type definitions
 ```
 
+## Architecture
+
+Full system architecture documentation is available in [ARCHITECTURE.md](./ARCHITECTURE.md). It covers the microcontroller, Python backend, Vite/React frontend, Node.js tooling, Nginx deployment, runtime flows, and open integration points.
+
 ## Installation
 
 ```bash
