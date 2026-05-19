@@ -1,10 +1,19 @@
 import type { TreatmentMode } from '@/types'
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000'
+const DEFAULT_API_PORT = '8000'
+
+const getDefaultApiBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    return `http://localhost:${DEFAULT_API_PORT}`
+  }
+
+  const hostname = window.location.hostname || 'localhost'
+  return `${window.location.protocol}//${hostname}:${DEFAULT_API_PORT}`
+}
 
 const getApiBaseUrl = () => {
   const configuredUrl = import.meta.env.VITE_HK_API_BASE_URL as string | undefined
-  return (configuredUrl || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+  return (configuredUrl || getDefaultApiBaseUrl()).replace(/\/$/, '')
 }
 
 type QueryValue = string | number | boolean
@@ -113,8 +122,14 @@ export const hairKillerApi = {
     return getApiBaseUrl()
   },
 
-  getFrameUrl() {
-    return `${getApiBaseUrl()}/frame/current`
+  getFrameUrl(cacheBust?: number) {
+    const url = new URL(`${getApiBaseUrl()}/frame/current`)
+
+    if (cacheBust) {
+      url.searchParams.set('t', String(cacheBust))
+    }
+
+    return url.toString()
   },
 
   health() {

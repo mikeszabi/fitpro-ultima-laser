@@ -318,6 +318,36 @@
     color: $color-ultima-orange;
   }
 
+  &__camera-error {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 44px;
+    border-radius: 39px 0 0 39px;
+    color: $color-white;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.72);
+    pointer-events: none;
+
+    span {
+      font-size: 30px;
+      line-height: 38px;
+    }
+
+    small {
+      max-width: 430px;
+      font-size: 18px;
+      line-height: 24px;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.78);
+    }
+  }
+
   &__camera-placeholder {
     background: rgba(0, 0, 0, 0.65);
   }

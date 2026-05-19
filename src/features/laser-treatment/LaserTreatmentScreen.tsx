@@ -18,6 +18,28 @@ const stringifyBackendValue = (value: unknown) => (
   Array.isArray(value) ? value.join(' ') : String(value || '')
 )
 
+const stringifyBackendResponse = (value: unknown) => (
+  stringifyBackendValue(
+    typeof value === 'object' && value !== null && 'response' in value
+      ? (value as { response?: unknown }).response
+      : value,
+  )
+)
+
+const backendValueIncludes = (value: unknown, pattern: string) => (
+  stringifyBackendResponse(value).toUpperCase().includes(pattern)
+)
+
+const isSequenceFinished = (stateText: string, eventText: string) => (
+  stateText.includes('IDLE') ||
+  stateText.includes('COMPLETED') ||
+  stateText.includes('FINISHED') ||
+  stateText.includes('ERROR') ||
+  eventText.includes('TARGET_SEQ_FINISHED') ||
+  eventText.includes('ERROR') ||
+  eventText.includes('NOK')
+)
+
 const LaserTreatmentScreen: React.FC = () => {
   const { t } = useTranslation()
   const dispatch = useAppDispatch()
@@ -38,6 +60,8 @@ const LaserTreatmentScreen: React.FC = () => {
   const [nm1064Power, setNm1064Power] = useState(12)
   const [pulseWidth, setPulseWidth] = useState(80)
   const [apiStatus, setApiStatus] = useState('Backend: checking')
+  const [cameraStreamUrl, setCameraStreamUrl] = useState(() => hairKillerApi.getFrameUrl(Date.now()))
+  const [cameraStreamError, setCameraStreamError] = useState(false)
   const [isBusy, setIsBusy] = useState(false)
   const settingsLoadedRef = useRef(false)
 
@@ -146,14 +170,26 @@ const LaserTreatmentScreen: React.FC = () => {
     return () => window.clearTimeout(handle)
   }, [laserState, nm808Power, nm980Power, nm1064Power, pulseWidth, showBackendError])
 
+  useEffect(() => {
+    if (!cameraStreamError) return
+
+    const handle = window.setTimeout(() => {
+      setCameraStreamUrl(hairKillerApi.getFrameUrl(Date.now()))
+    }, 2500)
+
+    return () => window.clearTimeout(handle)
+  }, [cameraStreamError, cameraStreamUrl])
+
   const captureAndLoadTargets = useCallback(async () => {
+    await hairKillerApi.clearTargets()
+    await hairKillerApi.clearPoints()
+    await hairKillerApi.showTargets(false)
+
     const capture = await hairKillerApi.captureDetections()
     setTarget(capture.captured > 0)
     setTargetedFollicles(capture.captured)
 
     if (capture.captured === 0) {
-      await hairKillerApi.clearTargets()
-      await hairKillerApi.showTargets(false)
       setLoadedTargetCount(0)
       return 0
     }
@@ -168,12 +204,11 @@ const LaserTreatmentScreen: React.FC = () => {
   const fireLoadedSequence = useCallback(async () => {
     if (treatmentMode === 'manual') {
       await hairKillerApi.setSequenceMode('manual')
-      await hairKillerApi.stepSequence()
-      return
+      return hairKillerApi.stepSequence()
     }
 
     await hairKillerApi.setSequenceMode('auto')
-    await hairKillerApi.startSequence()
+    return hairKillerApi.startSequence()
   }, [treatmentMode])
 
   const cleanupFinishedSequence = useCallback(async (keepTargetsVisible = false) => {
@@ -197,17 +232,12 @@ const LaserTreatmentScreen: React.FC = () => {
     while (Date.now() < deadline) {
       const status = await hairKillerApi.getSequenceStatus()
       const stateText = stringifyBackendValue(status.state).toUpperCase()
-      const lastEvent = status.events?.find((event) => (
+      const finishEvent = status.events?.find((event) => (
         typeof event.timestamp === 'number' && event.timestamp >= startedAt - SEQUENCE_POLL_MS
       ))
-      const eventText = `${lastEvent?.status || ''} ${lastEvent?.message || ''}`.toUpperCase()
+      const eventText = `${finishEvent?.status || ''} ${finishEvent?.message || ''}`.toUpperCase()
 
-      if (
-        lastEvent ||
-        stateText.includes('COMPLETED') ||
-        stateText.includes('ERROR') ||
-        eventText.includes('TARGET_SEQ_FINISHED')
-      ) {
+      if (isSequenceFinished(stateText, eventText)) {
         return
       }
 
@@ -219,7 +249,12 @@ const LaserTreatmentScreen: React.FC = () => {
     const startedAt = Date.now()
 
     try {
-      await fireLoadedSequence()
+      const response = await fireLoadedSequence()
+
+      if (backendValueIncludes(response, 'NOK')) {
+        throw new Error(stringifyBackendResponse(response))
+      }
+
       await waitForSequenceDone(startedAt, targetsCount)
     } finally {
       await cleanupFinishedSequence(keepTargetsVisible)
@@ -328,9 +363,7 @@ const LaserTreatmentScreen: React.FC = () => {
         return
       }
 
-      const targetsCount = treatmentMode === 'semi-auto'
-        ? await captureAndLoadTargets()
-        : loadedTargetCount || await captureAndLoadTargets()
+      const targetsCount = loadedTargetCount || await captureAndLoadTargets()
 
       if (targetsCount === 0) return
       await fireLoadedSequenceAndCleanup(targetsCount, treatmentMode === 'semi-auto')
@@ -523,7 +556,22 @@ const LaserTreatmentScreen: React.FC = () => {
 
         <section className={`laser-treatment-screen__camera-section ${laserState === 'ready' ? 'laser-treatment-screen__camera-section--ready' : ''}`}>
           <div className="laser-treatment-screen__camera-container">
-            <img src={hairKillerApi.getFrameUrl()} alt="Treatment camera stream" className="laser-treatment-screen__camera-feed" />
+            <img
+              src={cameraStreamUrl}
+              alt="Treatment camera stream"
+              className="laser-treatment-screen__camera-feed"
+              onLoad={() => setCameraStreamError(false)}
+              onError={() => {
+                setCameraStreamError(true)
+                setApiStatus(`Camera stream unavailable: ${hairKillerApi.baseUrl}`)
+              }}
+            />
+            {cameraStreamError && (
+              <div className="laser-treatment-screen__camera-error">
+                <span>Camera stream unavailable</span>
+                <small>{hairKillerApi.baseUrl}</small>
+              </div>
+            )}
           </div>
 
           <div className="laser-treatment-screen__status-panel">
