@@ -251,6 +251,11 @@ const LaserTreatmentScreen: React.FC = () => {
       await hairKillerApi.setVacuumCheckEnabled(mode === 'auto')
       await hairKillerApi.setSequenceMode(mode)
 
+      if (mode === 'semi-auto') {
+        await cleanupFinishedSequence()
+        await captureAndLoadTargets()
+      }
+
       if (mode !== 'auto') {
         setVacuumLock(false)
       }
@@ -320,10 +325,9 @@ const LaserTreatmentScreen: React.FC = () => {
         return
       }
 
-      let targetsCount = loadedTargetCount
-      if (targetsCount === 0) {
-        targetsCount = await captureAndLoadTargets()
-      }
+      const targetsCount = treatmentMode === 'semi-auto'
+        ? await captureAndLoadTargets()
+        : loadedTargetCount || await captureAndLoadTargets()
 
       if (targetsCount === 0) return
       await fireLoadedSequenceAndCleanup(targetsCount)
