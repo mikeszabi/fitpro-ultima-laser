@@ -176,11 +176,14 @@ const LaserTreatmentScreen: React.FC = () => {
     await hairKillerApi.startSequence()
   }, [treatmentMode])
 
-  const cleanupFinishedSequence = useCallback(async () => {
+  const cleanupFinishedSequence = useCallback(async (keepTargetsVisible = false) => {
     try {
       await hairKillerApi.stopSequence()
     } finally {
       await hairKillerApi.clearAppError()
+      if (keepTargetsVisible) {
+        await hairKillerApi.showTargets(true)
+      }
     }
   }, [])
 
@@ -212,14 +215,14 @@ const LaserTreatmentScreen: React.FC = () => {
     }
   }, [pulseWidth])
 
-  const fireLoadedSequenceAndCleanup = useCallback(async (targetsCount: number) => {
+  const fireLoadedSequenceAndCleanup = useCallback(async (targetsCount: number, keepTargetsVisible = false) => {
     const startedAt = Date.now()
 
     try {
       await fireLoadedSequence()
       await waitForSequenceDone(startedAt, targetsCount)
     } finally {
-      await cleanupFinishedSequence()
+      await cleanupFinishedSequence(keepTargetsVisible)
     }
   }, [cleanupFinishedSequence, fireLoadedSequence, waitForSequenceDone])
 
@@ -330,7 +333,7 @@ const LaserTreatmentScreen: React.FC = () => {
         : loadedTargetCount || await captureAndLoadTargets()
 
       if (targetsCount === 0) return
-      await fireLoadedSequenceAndCleanup(targetsCount)
+      await fireLoadedSequenceAndCleanup(targetsCount, treatmentMode === 'semi-auto')
     })
   }
 
