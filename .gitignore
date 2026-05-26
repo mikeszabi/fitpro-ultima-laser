@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Python / Qt app
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+qt_venv/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

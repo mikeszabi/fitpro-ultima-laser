@@ -240,3 +240,81 @@ Megjegyzes: a CSP-t a valos eroforrasokhoz kell igazitani. Ha inline script ninc
 - Ha a font nem toltodik be, ellenorizd a `src/styles/fonts.scss` fajlban a path-okat.
 - Ha nem valt screen, ellenorizd a `uiSlice` akcioit es a `currentScreen` erteket.
 - Random hardver hibak a `hardwareService.ts` mockbol jonnek (5%).
+
+## Natív Qt/QML kiosk irány
+
+A `qt` branchben elindult egy böngészőmotor nélküli Jetson kiosk alkalmazás a `qt_app/` mappában.
+
+### Célarchitektúra
+
+```text
+PySide6/QML natív kiosk app
+        |
+        | HTTP / MJPEG frame frissítés
+        v
+FastAPI backend :8000
+        |
+        | USB serial
+        v
+STM32 / lézer vezérlő
+```
+
+### Fejlesztői indítás
+
+```bash
+cd qt_app
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python main.py --windowed
+```
+
+Backend URL felülírás:
+
+```bash
+FITPRO_API_BASE_URL=http://127.0.0.1:8000 python main.py --windowed
+```
+
+### Kiosk indítás
+
+Paraméter nélkül fullscreenben indul:
+
+```bash
+python qt_app/main.py
+```
+
+Systemd példa:
+
+```text
+qt_app/systemd/fitpro-ultima-kiosk.service
+```
+
+Touchscreen/X11 kiosk indításnál a service a `qt_app/run-kiosk.sh` scriptet használja. Ez kikapcsolja a képernyővédőt és DPMS blankinget, majd `QT_QPA_PLATFORM=xcb` beállítással indítja a natív appot.
+
+Érintés ellenőrzése Jetsonon:
+
+```bash
+cat /proc/bus/input/devices
+sudo evtest
+xinput list
+```
+
+Ha a panel érintésre küld eventeket, de a pozíció elcsúszik, X11 alatt `xinput_calibrator` vagy `xinput set-prop ... "Coordinate Transformation Matrix" ...` szükséges.
+
+### Fontos fájlok
+
+- `qt_app/main.py`: PySide6 entrypoint.
+- `qt_app/app_controller.py`: QML-ből hívható app state és parancsok.
+- `qt_app/api_client.py`: a meglévő FastAPI backend Python kliense.
+- `qt_app/qml/screens/LaserTreatmentScreen.qml`: első natív kezelési képernyő.
+
+### Jelenlegi státusz
+
+Az első natív változat futtatható alapot ad, de még nem teljes feature-paritás a React UI-val. A fő kezelés flow már átkerült: backend sync, kamera frame frissítés, lézer ARM/DISARM, teljesítmény csúszkák, red dot, vákuum, célpont betöltés, FIRE és STOP.
+
+Touch UX:
+
+- A Qt app egér/touch esemény szintézist engedélyez a `main.py`-ban.
+- A teljesítményállítók slider mellett nagy `-` / `+` gombokat is kaptak.
+- A FIRE gomb nyomva tartás után indít, véletlen érintés ellen.
+- A STOP nagy, közvetlen gombként marad elérhető.
