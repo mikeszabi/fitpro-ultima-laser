@@ -1,21 +1,15 @@
 # FitPro Ultima Laser rendszerarchitektura
 
-Ez a dokumentum a FitPro Ultima Laser teljes szoftveres es hardverkozeli architekturajat foglalja ossze: mikrokontroller, Python backend, Vite/React frontend, Node.js fejlesztoi tooling es Nginx production kiszolgalas.
+Ez a dokumentum a FitPro Ultima Laser aktualis szoftveres es hardverkozeli architekturajat foglalja ossze. A production kezelo felulet mar nem React/Chromium alapu web frontend, hanem nativ PySide6/QML kiosk alkalmazas a `qt_app/` mappaban. A regi React/Vite kod tovabbra is megtalalhato a repoban design- es osszehasonlitasi referenciakent.
 
 ## 1. Rendszerattekintes
 
-A rendszer egy erintokepernyos, kioszk jellegu kezelo feluletbol, egy lokalis Python backendbol es egy soros porton elerheto mikrokontrolleres vezerlobol all. A frontend bongeszoben fut, a backend FastAPI alkalmazaskent kezeli a kamerat, detektalast, celpont-generalast es a hardverparancsokat, a mikrokontroller pedig a lezer, galvo, vakuum es szenzor alacsony szintu vezerleset vegzi.
-
-Production modban a kommunikacio jellemzoen egyetlen gepen belul tortenik:
+A rendszer egy erintokepernyos, nativ Qt kiosk alkalmazasbol, egy lokalis Python/FastAPI backendbol es egy soros porton elerheto mikrokontrolleres vezerlobol all.
 
 ```text
-Erintokepernyo / Chromium kiosk
+Erintokepernyo / PySide6 QML kiosk app
         |
-        | HTTP, SSE, MJPEG
-        v
-Nginx :80  ---> statikus React build
-        |
-        | frontend API hivasok: http://localhost:8000
+        | HTTP JSON, MJPEG frame URL
         v
 Python FastAPI / Uvicorn :8000
         |
@@ -29,7 +23,95 @@ STM32 / mikrokontroller
         +--> szenzorok: homerseklet, aram, feedback, allapotok
 ```
 
+A Qt app kozvetlenul a backend API-t hivja. Nincs Vite dev server, nincs Nginx statikus frontend kiszolgalas es nincs Chromium kiosk a normal Qt production flow-ban.
+
 ## 2. Fobb komponensek
+
+### Nativ Qt frontend
+
+A frontend ebben a repoban talalhato: `qt_app/`.
+
+Technologiak:
+
+- Python 3
+- PySide6 / Qt Quick / QML
+- QML kepernyok es komponensek
+- Python controller reteg Qt propertykkel, signalokkal es slotokkal
+- egyszeru HTTP kliens a FastAPI backendhez
+
+Fo feladatai:
+
+- erintokepernyos kiosk UI
+- kepernyonavigacio: start, login placeholder, settings placeholder, system info, laser treatment
+- lezer parameter UI: 808 / 980 / 1064 teljesitmeny, pulse width, arm/disarm
+- red dot, vakuum, capture/load targets, fire es stop kontrollok
+- kamera frame megjelenitese a backend `/frame/current` endpointjan keresztul
+- backend allapot, hiba es foglaltsagi allapot megjelenitese
+
+Fontos Qt frontend fajlok:
+
+- `qt_app/main.py`: PySide6 entrypoint, QML engine inicializalas
+- `qt_app/app_controller.py`: nativ alkalmazasallapot, QML propertyk, slotok es async API worker logika
+- `qt_app/api_client.py`: FastAPI backend kliens
+- `qt_app/qml/Main.qml`: fo ablak, fullscreen/windowed mod, screen loader, globalis error dialog
+- `qt_app/qml/screens/`: QML kepernyok
+- `qt_app/qml/components/`: ujrahasznalt QML komponensek
+- `qt_app/run-kiosk.sh`: fullscreen kiosk indito script
+- `qt_app/systemd/fitpro-ultima-kiosk.service`: systemd minta service
+
+Alapertelmezett backend URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+Felulirhato:
+
+```bash
+FITPRO_API_BASE_URL=http://127.0.0.1:8000 python main.py --windowed
+python main.py --api-base-url http://127.0.0.1:8000 --windowed
+```
+
+### Python backend
+
+A backend a kapcsolodo `hairkiller` projektben talalhato FastAPI alkalmazas. Fejlesztesben es productionben Uvicorn futtatja, alapertelmezett portja `8000`.
+
+Feladatai:
+
+- REST API biztositasa a Qt frontend szamara
+- kamera kepfolyam kezelese
+- hajszal/follicle detektalas YOLO modellel
+- detektalt pontok tarolasa es celpontokka alakitasa
+- kepkoordinatak galvo koordinatakka konvertalasa homografia alapjan
+- mikrokontroller parancsok osszeallitasa es soros porton kuldese
+- hardvervalaszok ertelmezese es JSON API valaszokka alakitasa
+
+Fontos backend modulok a `hairkiller` projektben:
+
+- `app/hk_full_app.py`: real FastAPI alkalmazas
+- `app/hk_mock_app.py`: hardver nelkuli mock backend
+- `code/serial_devices_handler.py`: soros kommunikacio
+- `code/serial_commands.py`: firmware parancsok es metadata
+- `code/laser_handler.py`: lezer vezerles magasabb szintu wrapperben
+- `code/target_handler.py`: target lista es szekvencia vezerles
+- `code/galvo_handler.py`: galvo mozgatasi logika
+- `code/detection_handler.py`: detektalas es pontkezeles
+- `code/camera_handler.py`: kamera kezeles
+
+Backend inditas fejleszteshez:
+
+```bash
+cd /home/jetson/Projects/hairkiller
+python3 -m uvicorn app.hk_full_app:app --host 0.0.0.0 --port 8000
+```
+
+Backend service production peldaja:
+
+```text
+systemd service: hairkiller-backend
+working directory: /home/jetson/Projects/hairkiller
+exec: uvicorn backend.hk_backend_app:app --host 127.0.0.1 --port 8000
+```
 
 ### Mikrokontroller reteg
 
@@ -67,169 +149,27 @@ APP_SET_CHECK_VACUUM 1
 SENSORS_GET_VALUES
 ```
 
-A mikrokontroller valaszai szoveges protokollt kovetnek, peldaul:
+A mikrokontroller valaszai szoveges protokollt kovetnek:
 
 ```text
 [LASER_SET_ARM_EN][1]->[OK][12523]
 [TARGET_START]->[NOK][reason][12523]
 ```
 
-### Python backend
-
-A backend a `hairkiller` projektben talalhato FastAPI alkalmazas. Fejlesztesben es productionben Uvicorn futtatja, alapertelmezett portja `8000`.
-
-Feladatai:
-
-- REST API biztositasa a frontend szamara
-- kamera kepfolyam kezelese
-- hajszal/follicle detektalas YOLO modellel
-- detektalt pontok tarolasa es celpontokka alakitasa
-- kepkoordinatak galvo koordinatakka konvertalasa homografia alapjan
-- mikrokontroller parancsok osszeallitasa es soros porton kuldese
-- hardvervalaszok ertelmezese es JSON API valaszokka alakitasa
-- SSE es MJPEG stream kiszolgalasa
-
-Fontos backend modulok a `hairkiller` projektben:
-
-- `app/hk_full_app.py`: real FastAPI alkalmazas
-- `app/hk_mock_app.py`: hardver nelkuli mock backend
-- `code/serial_devices_handler.py`: soros kommunikacio
-- `code/serial_commands.py`: firmware parancsok es metadata
-- `code/laser_handler.py`: lezer vezerles magasabb szintu wrapperben
-- `code/target_handler.py`: target lista es szekvencia vezerles
-- `code/galvo_handler.py`: galvo mozgatasi logika
-- `code/detection_handler.py`: detektalas es pontkezeles
-- `code/camera_handler.py`: kamera kezeles
-
-Backend service production peldaja:
-
-```text
-systemd service: hairkiller-backend
-working directory: /home/jetson/Projects/hairkiller
-exec: uvicorn backend.hk_backend_app:app --host 127.0.0.1 --port 8000
-```
-
-A jelenlegi frontend dokumentacio fejleszteshez ezt hasznalja:
-
-```bash
-python3 -m uvicorn app.hk_full_app:app --host 0.0.0.0 --port 8000
-```
-
-### Frontend alkalmazas
-
-A frontend ebben a repoban talalhato: `fitpro-ultima-laser`.
-
-Technologiak:
-
-- React 18
-- TypeScript
-- Redux Toolkit
-- i18next / react-i18next
-- SCSS
-- Vite 5
-
-Feladatai:
-
-- erintokepernyos kezelo UI
-- kezelesi modok: `auto`, `semi-auto`, `manual`
-- lezer parameter UI: 808 / 980 / 1064 teljesitmeny, pulse width, arm/disarm
-- red-dot, vakuum, vacuum lock, sensitivity es fire kontrollok
-- kamera stream megjelenitese
-- detektalt celpontok es backend allapot megjelenitese
-- hibak globalis modalban torteno megjelenitese
-
-Fontos frontend fajlok:
-
-- `src/main.tsx`: React entry point
-- `src/App.tsx`: screen valaszto es globalis modalok
-- `src/features/laser-treatment/LaserTreatmentScreen.tsx`: kezelesi kepernyo es backend flow-k
-- `src/services/hairKillerApi.ts`: HairKiller backend kliens
-- `src/store/`: Redux store es slice-ok
-- `src/i18n/`: magyar es angol forditasok
-
-### Node.js es Vite
-
-A Node.js itt nem production alkalmazasszerver, hanem fejlesztoi es build toolchain.
-
-Feladatai:
-
-- npm dependency management
-- Vite dev server inditasa
-- TypeScript ellenorzes
-- production build generalasa
-- opcionisan preview szerver futtatasa
-
-Fontos scriptek:
-
-```bash
-npm run dev       # Vite dev server, alapertelmezett: http://localhost:3000
-npm run build     # tsc + vite build, output: dist/
-npm run preview   # local production preview
-npm run deploy    # build + dist masolasa /var/www/frontend ala
-```
-
-Fejlesztesben a Vite dev server kozvetlenul szolgalja ki a frontendet `3000` porton. Productionben a Vite mar nem fut; csak a leforditott statikus `dist/` allomanyokat szolgalja ki az Nginx.
-
-### Nginx
-
-Az Nginx production modban statikus webszerverkent mukodik.
-
-Aktualis production konfiguracio:
-
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    root /var/www/frontend;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-Feladatai:
-
-- React SPA statikus build kiszolgalasa `http://localhost` alatt
-- deep link / kliens oldali routing tamogatasa `try_files ... /index.html` segitsegevel
-- kioszk bongeszo szamara stabil lokalis URL biztositasa
-
-Megjegyzes: a jelenlegi konfiguracio nem reverse proxyzza a backend API-t. A frontend kozvetlenul a `VITE_HK_API_BASE_URL` alapjan hivja a backendet, alapertelmezetten `http://localhost:8000`.
-
 ## 3. Kommunikacios kapcsolatok
 
-### Frontend -> Backend
+### Qt frontend -> Backend
 
-A frontend fetch API-val es EventSource-szal kommunikal:
+A `qt_app/api_client.py` szinkron HTTP hivasokat vegez `urllib.request` alapon. Az `AppController` ezeket `QThreadPool` workerben futtatja, hogy a QML UI ne blokkoljon.
 
-- REST JSON API: `GET` / `POST`
-- SSE: `/sse/detection`
-- kamera stream: `/frame/current`, MJPEG kepfolyamkent
-
-Alapertelmezett backend URL:
-
-```text
-http://localhost:8000
-```
-
-Felulirhato:
-
-```bash
-VITE_HK_API_BASE_URL=http://<backend-host>:<port>
-```
-
-Fontos API endpointok:
+Hasznalt endpointok:
 
 ```text
 GET  /health
 GET  /stats
 GET  /detection/status
-GET  /sse/detection
 GET  /frame/current
 GET  /laser/settings
-GET  /laser/temp
 GET  /sensors/values
 GET  /seq/status
 
@@ -248,16 +188,19 @@ POST /laser/settings
 POST /laser/arm
 POST /laser/disarm
 POST /laser/red_dot?enabled=true|false
+POST /laser/fire?duration_ms=<ms>
 POST /app/raw_command
 POST /app/clear_error
 ```
+
+A kamera megjelenites nem SSE-alapu. A QML kepforras a `/frame/current` URL-t kapja meg, cache-busting query parameterrel frissitve.
 
 ### Backend -> Mikrokontroller
 
 A backend magasabb szintu API hivasaibol firmware parancsokat general. Pelda:
 
 ```text
-Frontend:
+Qt frontend:
 POST /laser/settings
 
 Backend:
@@ -271,7 +214,7 @@ Mikrokontroller:
 Target szekvencia eseten:
 
 ```text
-Frontend:
+Qt frontend:
 POST /detection/capture
 POST /seq/update_targets
 POST /seq/start
@@ -282,7 +225,7 @@ Backend:
 3. TARGET_CLEAR_TARGETS
 4. TARGET_SET_NEW_TARGET minden celpontra
 5. TARGET_SET_MODE manual/auto
-6. TARGET_START
+6. TARGET_START vagy TARGET_STEP
 ```
 
 ## 4. Futasmodok
@@ -290,10 +233,7 @@ Backend:
 ### Fejlesztoi mod
 
 ```text
-Chromium / browser
-        |
-        v
-Vite dev server :3000
+PySide6/QML app --windowed
         |
         v
 Python backend :8000
@@ -305,17 +245,19 @@ mock backend vagy real mikrokontroller
 Inditas:
 
 ```bash
-# frontend
-cd /home/mike/Projects/fitpro-ultima-laser
-npm install
-npm run dev
+# Qt frontend
+cd /home/jetson/Projects/fitpro-ultima-laser/qt_app
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python main.py --windowed
 
 # backend
-cd /home/mike/Projects/hairkiller
+cd /home/jetson/Projects/hairkiller
 python3 -m uvicorn app.hk_full_app:app --host 0.0.0.0 --port 8000
 ```
 
-Hardver nelkuli fejleszteshez a mock backend hasznalhato.
+Hardver nelkuli fejleszteshez a backend mock app hasznalhato.
 
 ### Production / kioszk mod
 
@@ -324,24 +266,27 @@ system boot
    |
    +--> systemd: hairkiller-backend.service -> Uvicorn :8000
    |
-   +--> Nginx :80 -> /var/www/frontend
-   |
-   +--> desktop autostart -> Chromium --kiosk http://localhost
+   +--> systemd: fitpro-ultima-kiosk.service -> PySide6/QML fullscreen kiosk
 ```
 
-Production build:
+Qt kiosk inditas:
 
 ```bash
-npm run build
-sudo cp -r dist/. /var/www/frontend
-sudo systemctl reload nginx
+cd /opt/fitpro-ultima-laser/qt_app
+./run-kiosk.sh
 ```
 
-Chromium kioszk konfiguracio:
+A `run-kiosk.sh` X11 alatt kikapcsolja a kepernyovedot es DPMS blankinget, beallitja a `QT_QPA_PLATFORM=xcb` es `FITPRO_API_BASE_URL` kornyezeti valtozokat, majd fullscreen modban inditja a PySide6 appot.
+
+Systemd minta:
 
 ```text
-~/.config/autostart/chromium-kiosk.desktop
-Exec=chromium --kiosk ... "http://localhost"
+WorkingDirectory=/opt/fitpro-ultima-laser/qt_app
+Environment=DISPLAY=:0
+Environment=QT_QPA_PLATFORM=xcb
+Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000
+ExecStart=/opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+Restart=always
 ```
 
 ## 5. Fo kezelesi folyamat
@@ -349,41 +294,29 @@ Exec=chromium --kiosk ... "http://localhost"
 ### Indulas
 
 1. Backend elindul es inicializalja a kamerat, detektort, homografiat es soros hardver interfeszeket.
-2. Nginx kiszolgalja a frontend buildet.
-3. Chromium kiosk megnyitja a `http://localhost` oldalt.
-4. A React app betolt, majd a treatment screen a backendtol lekeri az alapallapotot:
+2. Qt kiosk service elinditja a PySide6/QML alkalmazast.
+3. `main.py` letrehozza az `ApiClient` es `AppController` peldanyokat, majd betolti a `Main.qml` fajlt.
+4. A QML screen loader a controller `screen` propertyje alapjan rendereli az aktualis kepernyot.
+5. A laser treatment kepernyore lepve a controller lekeri az alap backend allapotot:
    - `/health`
    - `/laser/settings`
    - `/detection/status`
    - `/stats`
-5. A frontend elinditja az SSE detektalas figyelest es periodikus stat pollingt.
 
-### Semi-auto kezeles
+### Target capture es betoltes
 
-1. Frontend bekapcsolja a detektalast.
-2. Vakuum safety check jelenleg semi-auto modban kikapcsolva.
-3. Capture:
-   - `/detection/capture`
-   - `/seq/update_targets`
-   - `/seq/show_targets?enabled=true`
-4. A felhasznalo FIRE gombbal inditja a celpont szekvenciat.
-5. A frontend pollolja a `/seq/status` endpointot, majd befejezes utan takarit:
-   - `/seq/stop`
-   - `/app/clear_error`
+1. A Qt app torli a korabbi targeteket es pontokat.
+2. Kikapcsolja a target overlayt.
+3. Meghivja a `/detection/capture` endpointot.
+4. Ha van detektalt pont, meghivja a `/seq/update_targets` endpointot.
+5. Bekapcsolja a target megjelenitest `/seq/show_targets?enabled=true` hivassal.
 
-### Auto kezeles
+### Fire / Stop
 
-1. Detection bekapcsol.
-2. Vakuum safety check bekapcsol.
-3. Vacuum lock eseten capture es target update tortenik.
-4. Ha van celpont, a frontend automatikusan inditja a szekvenciat.
-5. A backend/mikrokontroller safety feltetelek mellett vegrehajtja a target listat.
-
-### Manual kezeles
-
-1. Detection es celpont betoltes tortenhet.
-2. FIRE hatasara a frontend manual modba allitja a szekvenciat.
-3. A backend egy lepeses/manual target folyamatot indit.
+1. FIRE hatasara a Qt app beallitja a szekvencia modot.
+2. Manual modban `/seq/step` fut.
+3. Auto es semi-auto modban `/seq/start` fut.
+4. STOP hatasara `/seq/stop` fut, majd a controller megprobalja torolni a backend hiballapotot `/app/clear_error` hivassal.
 
 ## 6. Adat- es koordinatarendszerek
 
@@ -397,11 +330,13 @@ A detektalas native kepkoordinatakat ad. Ezeket a backend homografia segitsegeve
 
 ## 7. Allapotkezeles
 
-Frontend oldalon:
+Qt frontend oldalon:
 
-- Redux tarolja a globalis UI, auth, settings, laser es system allapotokat.
-- A treatment screen jelenleg sok realtime hardver allapotot lokalis React state-ben tart, mert ezek kozvetlen backend poll/SSE adatokbol frissulnek.
-- A backend hibak `systemSlice.showError` akcion keresztul globalis error modalban jelennek meg.
+- `AppController` tarolja a nativ UI allapotot Python propertykben.
+- QML kepernyok property bindingokon keresztul olvassak az allapotot.
+- QML gombok es kontrollok Qt slotokat hivnak.
+- API hivasok `QThreadPool` workerben futnak.
+- Hibak a globalis `ErrorDialog` komponensben jelennek meg.
 
 Backend oldalon:
 
@@ -414,7 +349,7 @@ Backend oldalon:
 
 Fontos biztonsagi hatarok:
 
-- A frontend nem kozvetlenul vezerel hardvert, csak backend API-t hiv.
+- A Qt frontend nem kozvetlenul vezerel hardvert, csak backend API-t hiv.
 - A backend validalja a kerest, majd a hardver handler reteg clampeli a kritikus tartomanyokat.
 - A mikrokontroller tovabbi safety felteteleket ervenyesit: arm allapot, vakuum, aktiv folyamat, homerseklet, hibak.
 - Disarm/stop parancsoknak barmikor vegrehajthatonak kell maradniuk.
@@ -422,31 +357,22 @@ Fontos biztonsagi hatarok:
 Uzemeltetes:
 
 - A backend systemd service-kent fusson, naplozasa `journalctl -u hairkiller-backend -f`.
-- A frontend statikus buildje Nginx alatt legyen.
-- A Chromium dedikalt kioszk userrel es minimalis desktop kornyezettel fusson.
+- A Qt kiosk kulon systemd service-kent fusson, naplozasa `journalctl -u fitpro-ultima-kiosk -f`.
+- A Qt app dedikalt kiosk userrel es minimalis desktop kornyezettel fusson.
 - A soros port jogosultsagokat a `setup_serial.sh` allitsa be.
-
-Javasolt webes hardening Nginx alatt:
-
-```text
-Content-Security-Policy: default-src 'self'; img-src 'self' data: http://localhost:8000; connect-src 'self' http://localhost:8000; style-src 'self' 'unsafe-inline'; script-src 'self'
-X-Content-Type-Options: nosniff
-Referrer-Policy: no-referrer
-X-Frame-Options: DENY
-Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=()
-```
-
-Ezt a tenyleges API originhez kell igazitani, ha a backend nem `localhost:8000`.
+- A backend API alapertelmezetten csak lokalis interface-en legyen elerheto productionben.
 
 ## 9. Deployment artefaktumok
 
 Ebben a repoban:
 
-- `deploy/frontend.nginx`: production frontend Nginx config
-- `deploy/test-frontend.nginx`: test frontend Nginx config
+- `qt_app/`: aktualis nativ Qt frontend
+- `qt_app/requirements.txt`: PySide6 dependency
+- `qt_app/run-kiosk.sh`: kiosk indito script
+- `qt_app/systemd/fitpro-ultima-kiosk.service`: Qt kiosk systemd service minta
 - `deploy/hairkiller-backend.service`: backend systemd service minta
-- `deploy/chromium-kiosk.desktop`: Chromium kiosk autostart minta
-- `dist/`: Vite production build output
+- `src/`, `package.json`, `vite.config.ts`: regi React/Vite frontend, jelenleg legacy/reference
+- `deploy/frontend.nginx`, `deploy/test-frontend.nginx`, `deploy/chromium-kiosk.desktop`: regi Chromium/Nginx deployment artefaktumok
 
 Kapcsolodo backend repoban:
 
@@ -460,7 +386,7 @@ Kapcsolodo backend repoban:
 A jelenlegi repo es dokumentacio alapjan ezek a pontok tovabbi dontest vagy pontositast igenyelhetnek:
 
 - A backend service fajlban szereplo `backend.hk_backend_app:app` es a fejlesztoi doksiban szereplo `app.hk_full_app:app` kozotti production entrypoint egyeztetese.
-- A mock backend fajlnevek dokumentacios frissitese: a frontend doksi `hk_full_app_mock.py`-t emlit, a backend repoban jelenleg `hk_mock_app.py` lathato.
-- Nginx reverse proxy dontes: maradjon-e kozvetlen `localhost:8000` API hivas, vagy legyen `/api` proxy ugyanazon origin alatt.
-- CORS production szigoritasa, ha nem azonos originre kerul az API.
-- Automatikus frontend tesztek es backend integration smoke tesztek bevezetese.
+- A Qt app feature-paritasanak befejezese a regi React frontendhez kepest.
+- A production telepitesi utvonal veglegesitese: repo checkout vagy `/opt/fitpro-ultima-laser`.
+- Touchscreen kalibracio es X11/Wayland platform valasztas veglegesitese Jetsonon.
+- Automatikus Qt smoke tesztek es backend integration smoke tesztek bevezetese.

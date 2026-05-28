@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QObject, Property, QRunnable, QThreadPool, Signal, Slot
@@ -39,13 +42,16 @@ class AppController(QObject):
     targetChanged = Signal()
     cameraFrameUrlChanged = Signal()
     errorChanged = Signal()
-    _taskFinished = Signal(str, object, object, bool)
-    _taskFailed = Signal(str, str, bool)
+    _cameraFrameReady = Signal(str, object)
+    _cameraFrameFailed = Signal(str, object)
+    _taskFinished = Signal(str, object, object, bool, object)
+    _taskFailed = Signal(str, str, bool, object)
 
     def __init__(self, api: ApiClient | None = None) -> None:
         super().__init__()
         self._api = api or ApiClient()
         self._pool = QThreadPool.globalInstance()
+        self._workers: list[ApiWorker] = []
 
         self._screen = "start"
         self._api_status = "Backend: checking"
@@ -63,10 +69,16 @@ class AppController(QObject):
         self._loaded_target_count = 0
         self._confidence = 0.1
         self._treatment_mode = "semi-auto"
-        self._camera_frame_url = self._api.frame_url(int(time.time() * 1000))
+        self._camera_frame_dir = Path(tempfile.gettempdir()) / "fitpro-ultima-laser"
+        self._camera_frame_dir.mkdir(parents=True, exist_ok=True)
+        self._camera_frame_slot = 0
+        self._camera_refresh_in_flight = False
+        self._camera_frame_url = ""
         self._error_title = ""
         self._error_message = ""
 
+        self._cameraFrameReady.connect(self._handle_camera_frame_ready)
+        self._cameraFrameFailed.connect(self._handle_camera_frame_failed)
         self._taskFinished.connect(self._handle_task_finished)
         self._taskFailed.connect(self._handle_task_failed)
 
@@ -167,8 +179,33 @@ class AppController(QObject):
 
     @Slot()
     def refreshCameraFrame(self) -> None:
-        self._camera_frame_url = self._api.frame_url(int(time.time() * 1000))
-        self.cameraFrameUrlChanged.emit()
+        if self._camera_refresh_in_flight:
+            return
+
+        self._camera_refresh_in_flight = True
+
+        def task() -> str:
+            timestamp = int(time.time() * 1000)
+            payload = self._api.snapshot_bytes(timestamp)
+            if not self._is_supported_image(payload):
+                raise ValueError("Snapshot response is not a supported image")
+
+            self._camera_frame_slot = 1 - self._camera_frame_slot
+            frame_path = self._camera_frame_dir / f"camera-frame-{self._camera_frame_slot}.jpg"
+            tmp_path = self._camera_frame_dir / f".camera-frame-{self._camera_frame_slot}.tmp"
+            tmp_path.write_bytes(payload)
+            os.replace(tmp_path, frame_path)
+            return f"{frame_path.as_uri()}?t={timestamp}"
+
+        worker = ApiWorker(task)
+        self._workers.append(worker)
+        worker.signals.finished.connect(
+            lambda url, worker=worker: self._cameraFrameReady.emit(str(url), worker)
+        )
+        worker.signals.failed.connect(
+            lambda message, worker=worker: self._cameraFrameFailed.emit(message, worker)
+        )
+        self._pool.start(worker)
 
     @Slot()
     def syncBackend(self) -> None:
@@ -271,7 +308,7 @@ class AppController(QObject):
     def fire(self) -> None:
         def task() -> Any:
             self._api.set_sequence_mode(self._treatment_mode)
-            if self._treatment_mode == "manual":
+            if self._treatment_mode in {"semi-auto", "manual"}:
                 return self._api.step_sequence()
             return self._api.start_sequence()
 
@@ -312,35 +349,66 @@ class AppController(QObject):
             self._set_busy(True)
         self._set_status(f"{label}...")
         worker = ApiWorker(task)
+        self._workers.append(worker)
         worker.signals.finished.connect(
-            lambda result: self._taskFinished.emit(label, result, on_success, busy)
+            lambda result, worker=worker: self._taskFinished.emit(label, result, on_success, busy, worker)
         )
         worker.signals.failed.connect(
-            lambda message: self._taskFailed.emit(label, message, busy)
+            lambda message, worker=worker: self._taskFailed.emit(label, message, busy, worker)
         )
         self._pool.start(worker)
 
-    @Slot(str, object, object, bool)
+    @Slot(str, object)
+    def _handle_camera_frame_ready(self, url: str, worker: object) -> None:
+        self._camera_refresh_in_flight = False
+        self._release_worker(worker)
+        self._camera_frame_url = url
+        self.cameraFrameUrlChanged.emit()
+
+    @Slot(str, object)
+    def _handle_camera_frame_failed(self, message: str, worker: object) -> None:
+        self._camera_refresh_in_flight = False
+        self._release_worker(worker)
+        self._set_status(f"Camera frame: {message}")
+
+    @Slot(str, object, object, bool, object)
     def _handle_task_finished(
         self,
         label: str,
         result: Any,
         on_success: Callable[[Any], None],
         busy: bool,
+        worker: object,
     ) -> None:
         on_success(result)
         self._set_status(f"{label}: OK")
+        self._release_worker(worker)
         if busy:
             self._set_busy(False)
 
-    @Slot(str, str, bool)
-    def _handle_task_failed(self, label: str, message: str, busy: bool) -> None:
+    @Slot(str, str, bool, object)
+    def _handle_task_failed(self, label: str, message: str, busy: bool, worker: object) -> None:
         self._set_status(message)
         self._error_title = label
         self._error_message = message
         self.errorChanged.emit()
+        self._release_worker(worker)
         if busy:
             self._set_busy(False)
+
+    def _release_worker(self, worker: object) -> None:
+        try:
+            self._workers.remove(worker)
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _is_supported_image(payload: bytes) -> bool:
+        return (
+            payload.startswith(b"\xff\xd8\xff")
+            or payload.startswith(b"\x89PNG\r\n\x1a\n")
+            or payload.startswith(b"BM")
+        )
 
     def _set_status(self, status: str) -> None:
         self._api_status = status

@@ -26,7 +26,7 @@ class ApiClient:
 
     def frame_url(self, cache_bust: int | None = None) -> str:
         query = "" if cache_bust is None else f"?t={cache_bust}"
-        return f"{self.base_url}/frame/current{query}"
+        return f"{self.base_url}/frame/snapshot{query}"
 
     def get(self, path: str, query: dict[str, Any] | None = None) -> Any:
         return self._request("GET", path, query=query)
@@ -36,6 +36,24 @@ class ApiClient:
 
     def post_json(self, path: str, body: dict[str, Any]) -> Any:
         return self._request("POST", path, body=body)
+
+    def get_bytes(self, path: str, query: dict[str, Any] | None = None) -> bytes:
+        url = self._build_url(path, query)
+        request = urllib.request.Request(url, method="GET")
+
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            message = exc.reason
+            try:
+                error_payload = json.loads(exc.read().decode("utf-8"))
+                message = error_payload.get("error") or error_payload.get("detail") or message
+            except Exception:
+                pass
+            raise ApiError(str(message)) from exc
+        except urllib.error.URLError as exc:
+            raise ApiError(str(exc.reason)) from exc
 
     def _request(
         self,
@@ -81,6 +99,10 @@ class ApiClient:
         suffix = f"?{encoded_query}" if encoded_query else ""
         return f"{self.base_url}{path}{suffix}"
 
+    def snapshot_bytes(self, cache_bust: int | None = None) -> bytes:
+        query = None if cache_bust is None else {"t": cache_bust}
+        return self.get_bytes("/frame/snapshot", query)
+
     def health(self) -> Any:
         return self.get("/health")
 
@@ -121,7 +143,7 @@ class ApiClient:
         return self.post("/seq/show_targets", {"enabled": enabled})
 
     def set_sequence_mode(self, mode: str) -> Any:
-        backend_mode = "manual" if mode == "manual" else "auto"
+        backend_mode = "auto" if mode == "auto" else "manual"
         return self.post("/seq/mode", {"mode": backend_mode})
 
     def start_sequence(self) -> Any:
@@ -167,13 +189,7 @@ class ApiClient:
         return self.post("/laser/fire", {"duration_ms": duration_ms})
 
     def set_vacuum_enabled(self, enabled: bool) -> Any:
-        return self.post_json(
-            "/app/raw_command",
-            {"command": f"APP_SET_VACUUM_EN {1 if enabled else 0}"},
-        )
+        return self.post("/vacuum/on" if enabled else "/vacuum/off")
 
     def set_vacuum_check_enabled(self, enabled: bool) -> Any:
-        return self.post_json(
-            "/app/raw_command",
-            {"command": f"APP_SET_CHECK_VACUUM {1 if enabled else 0}"},
-        )
+        return self.post("/vacuum/check", {"enabled": enabled})

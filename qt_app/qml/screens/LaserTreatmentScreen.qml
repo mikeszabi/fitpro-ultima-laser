@@ -14,7 +14,7 @@ Item {
     }
 
     Timer {
-        interval: 500
+        interval: 750
         running: true
         repeat: true
         onTriggered: appController.refreshCameraFrame()
@@ -291,16 +291,31 @@ Item {
                     Layout.preferredWidth: 580
                     Layout.preferredHeight: 580
                     radius: 290
-                    color: "#66000000"
-                    border.width: 5
-                    border.color: appController.laserReady ? "#ff7a1a" : "#ffffff"
+                    color: "#33000000"
                     clip: true
 
                     Image {
                         anchors.fill: parent
+                        anchors.margins: 16
                         source: appController.cameraFrameUrl
-                        fillMode: Image.PreserveAspectCrop
+                        visible: source.toString() !== ""
+                        asynchronous: true
+                        retainWhileLoading: true
                         cache: false
+                        fillMode: Image.PreserveAspectFit
+                        horizontalAlignment: Image.AlignHCenter
+                        verticalAlignment: Image.AlignVCenter
+                        sourceSize.width: width
+                        sourceSize.height: height
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: "transparent"
+                        border.width: 6
+                        border.color: appController.laserReady ? "#ff7a1a" : "#ffffff"
+                        z: 2
                     }
                 }
 

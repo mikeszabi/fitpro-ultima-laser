@@ -38,7 +38,7 @@ Item {
 
                 Text { text: "Backend"; color: "#ffffff"; font.pixelSize: 28; font.bold: true }
                 Text { text: appController.apiStatus; color: "#d8e4e3"; font.pixelSize: 22; wrapMode: Text.WordWrap; width: parent.width }
-                Text { text: "API: " + appController.cameraFrameUrl.replace("/frame/current?t=", ""); color: "#8fa6a6"; font.pixelSize: 18; width: parent.width; elide: Text.ElideRight }
+                Text { text: "API: " + appController.cameraFrameUrl.replace("/frame/snapshot?t=", ""); color: "#8fa6a6"; font.pixelSize: 18; width: parent.width; elide: Text.ElideRight }
             }
         }
 
