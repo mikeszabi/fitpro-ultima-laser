@@ -7,7 +7,7 @@ Natív PySide6/QML kiosk alkalmazás a Jetson célhardverhez. Ez az app nem bön
 ```bash
 cd qt_app
 python3 -m venv qt_venv
-. qt_venv/bin/activate
+source qt_venv/bin/activate
 pip install -r requirements.txt
 python main.py --windowed
 ```
@@ -78,7 +78,7 @@ Az első natív verzió a fő kezelési flow-t tartalmazza:
 - rendszerinformáció
 - laser treatment képernyő
 - backend health / stats / laser settings szinkron
-- kamera frame frissítés `/frame/snapshot` alapján
+- kamera frame frissítés `/frame/current` alapján
 - laser arm/disarm, red dot, vacuum, capture/load targets, fire, stop parancsok
 
 Ez még nem teljes feature-paritás a React alkalmazással, hanem a Jetsonon futtatható natív alap.
