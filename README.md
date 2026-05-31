@@ -20,6 +20,7 @@ A native PySide6/QML kiosk application for the Ultima Laser treatment system, de
 │   ├── api_client.py                # FastAPI backend client
 │   ├── requirements.txt             # Python dependencies (PySide6)
 │   ├── run-kiosk.sh                 # Kiosk startup script
+│   ├── assets/                      # Fonts and images used by QML
 │   ├── qml/
 │   │   ├── Main.qml                 # Main window and screen switching
 │   │   ├── components/              # Reusable QML components
@@ -31,8 +32,7 @@ A native PySide6/QML kiosk application for the Ultima Laser treatment system, de
 │   │       └── SystemInfoScreen.qml
 │   └── systemd/
 │       └── fitpro-ultima-kiosk.service
-├── src/                             # Legacy React frontend (archived)
-└── public/                          # Static assets
+└── deploy/                          # Backend deployment helpers
 ```
 
 ## Architecture

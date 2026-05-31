@@ -1,6 +1,6 @@
 # FitPro Ultima Laser - fejlesztoi dokumentacio
 
-Ez a dokumentum a projekt aktualis fejlesztoi attekinteset es a napi fejleszteshez szukseges lepeseket tartalmazza. A projekt fo frontendje mar a `qt_app/` alatti nativ PySide6/QML kiosk alkalmazas. A regi React/Vite frontend tovabbra is a repoban van, de jelenleg legacy/design referencia.
+Ez a dokumentum a projekt aktualis fejlesztoi attekinteset es a napi fejleszteshez szukseges lepeseket tartalmazza. Ebben a branchben a frontend csak a `qt_app/` alatti nativ PySide6/QML kiosk alkalmazas.
 
 ## Attekintes
 
@@ -13,15 +13,7 @@ A FitPro Ultima Laser UI egy nativ Qt kiosk alkalmazas Jetson celhardverre, 1080
 - FastAPI backend kliens `urllib.request` alapon
 - QThreadPool worker alapu async API hivasok
 - QML komponensek es kepernyok
-- Hurme fontok es a meglovo visual assetek a `public/` mappabol
-
-Legacy/reference stack:
-
-- React 18 + TypeScript
-- Vite 5
-- Redux Toolkit
-- i18next / react-i18next
-- SCSS
+- Hurme fontok es visual assetek a `qt_app/assets/` mappabol
 
 ## Kovetelmenyek
 
@@ -97,15 +89,13 @@ qt_app/
     Main.qml              # fo ablak, screen loader, globalis error dialog
     components/           # ujrahasznalt QML elemek
     screens/              # nativ kepernyok
+  assets/
+    images/               # QML kepek, hatterek, logok
+    fonts/                # Hurme fontok
   systemd/
     fitpro-ultima-kiosk.service
 
-public/
-  assets/                 # logo, hatterek, ikonok, design assetek
-  fonts/                  # Hurme fontok
-
-src/                      # regi React/Vite frontend, legacy/reference
-deploy/                   # backend service es regi web deployment mintak
+deploy/                   # backend service mintak
 ```
 
 ## Alkalmazas folyamata
@@ -230,7 +220,7 @@ Uj backend muvelet hozzaadasa:
 
 ## Design es assetek
 
-A QML UI szandekosan kozel tartja magat a korabbi React frontend latvanyahoz:
+A QML UI szandekosan kozel tartja magat az eredeti Ultima visual designhoz:
 
 - Ultima wave hatter
 - 1080x1920 portrait kompozicio
@@ -241,8 +231,8 @@ A QML UI szandekosan kozel tartja magat a korabbi React frontend latvanyahoz:
 
 Fontok es assetek:
 
-- `public/fonts/`
-- `public/assets/`
+- `qt_app/assets/fonts/`
+- `qt_app/assets/images/`
 
 ## Touchscreen es Jetson tippek
 
@@ -316,26 +306,6 @@ Jelenleg nincs automatizalt Qt tesztkeszlet. Javasolt minimalis manual smoke:
 4. Ellenorizd, hogy a backend statusz OK-ra valt.
 5. Ellenorizd, hogy a kamera frame frissul.
 6. Probald ki a laser arm/disarm, red dot, vacuum, capture/load targets, fire es stop kontrollokat mock backenddel vagy biztonsagos hardveres korulmenyek kozott.
-
-## Legacy React/Vite frontend
-
-A regi web frontend tovabbra is elerheto:
-
-```bash
-npm install
-npm run dev
-npm run build
-```
-
-Ez mar nem az aktualis production kiosk utvonal. A kovetkezo elemek legacy/reference statuszuak:
-
-- `src/`
-- `package.json`
-- `vite.config.ts`
-- `deploy/frontend.nginx`
-- `deploy/test-frontend.nginx`
-- `deploy/chromium-kiosk.desktop`
-- `CHROMIUM_AUTOSTART.md`
 
 ## Gyakori hibak / tippek
 

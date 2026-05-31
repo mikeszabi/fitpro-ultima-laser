@@ -17,6 +17,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="FitPro Ultima Laser native kiosk")
     parser.add_argument("--windowed", action="store_true", help="Run in a development window")
     parser.add_argument(
+        "--wide-screen",
+        action="store_true",
+        help="Scale the portrait kiosk UI so the full frontend fits on a wide display",
+    )
+    parser.add_argument(
         "--api-base-url",
         default=os.environ.get("FITPRO_API_BASE_URL"),
         help="FastAPI backend base URL",
@@ -40,6 +45,7 @@ def main() -> int:
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("appController", controller)
     engine.rootContext().setContextProperty("windowedMode", args.windowed)
+    engine.rootContext().setContextProperty("wideScreenMode", args.wide_screen)
     engine.addImportPath(str(qml_dir))
     engine.load(QUrl.fromLocalFile(str(qml_dir / "Main.qml")))
 

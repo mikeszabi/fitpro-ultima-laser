@@ -240,7 +240,7 @@ class AppController(QObject):
 
     @Slot(str, int)
     def setPower(self, channel: str, value: int) -> None:
-        value = max(0, min(100, int(value)))
+        value = max(0, min(15, int(value)))
         if channel == "p808":
             self._p808 = value
         elif channel == "p980":
@@ -255,7 +255,7 @@ class AppController(QObject):
 
     @Slot(int)
     def setPulseWidth(self, value: int) -> None:
-        self._pulse_width = max(1, min(1000, int(value)))
+        self._pulse_width = max(10, min(100, int(value)))
         self.pulseWidthChanged.emit()
         self._push_laser_settings()
 
@@ -425,10 +425,10 @@ class AppController(QObject):
 
         power = laser.get("power", {})
         self._laser_ready = bool(laser.get("armed", False))
-        self._p808 = int(power.get("p808", self._p808))
-        self._p980 = int(power.get("p980", self._p980))
-        self._p1064 = int(power.get("p1064", self._p1064))
-        self._pulse_width = int(laser.get("pulse_ms", self._pulse_width))
+        self._p808 = max(0, min(15, int(power.get("p808", self._p808))))
+        self._p980 = max(0, min(15, int(power.get("p980", self._p980))))
+        self._p1064 = max(0, min(15, int(power.get("p1064", self._p1064))))
+        self._pulse_width = max(10, min(100, int(laser.get("pulse_ms", self._pulse_width))))
         self._confidence = float(detection.get("conf", self._confidence))
         self._red_dot = bool(detection.get("red_dot") or stats.get("red_dot_enabled", False))
         target_count = int(

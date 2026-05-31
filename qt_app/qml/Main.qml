@@ -7,8 +7,12 @@ import "screens"
 
 ApplicationWindow {
     id: root
-    width: 1080
-    height: 1920
+    readonly property int designWidth: 1080
+    readonly property int designHeight: 1920
+    readonly property real fitScale: Math.min(width / designWidth, height / designHeight)
+
+    width: wideScreenMode ? 1920 : designWidth
+    height: wideScreenMode ? 1080 : designHeight
     visible: true
     visibility: windowedMode ? Window.Windowed : Window.FullScreen
     title: "FitPro Ultima Laser"
@@ -16,40 +20,50 @@ ApplicationWindow {
 
     FontLoader {
         id: hurme
-        source: "../../public/fonts/HurmeGeometricSans2-Regular.otf"
+        source: "../assets/fonts/HurmeGeometricSans2-Regular.otf"
     }
 
     Image {
         anchors.fill: parent
-        source: "../../public/assets/ultima-wave-bg.webp"
+        source: "../assets/images/Background-2.png"
         fillMode: Image.PreserveAspectCrop
     }
 
     Rectangle {
         anchors.fill: parent
-        color: "#33000000"
+        color: "#15000000"
     }
 
-    Loader {
-        id: screenLoader
-        anchors.fill: parent
-        sourceComponent: {
-            switch (appController.screen) {
-            case "login": return loginScreen
-            case "settings": return settingsScreen
-            case "laser-treatment": return laserTreatmentScreen
-            case "system-info": return systemInfoScreen
-            default: return startScreen
+    Item {
+        id: appSurface
+        width: designWidth
+        height: designHeight
+        anchors.centerIn: parent
+        scale: wideScreenMode ? fitScale : 1
+        transformOrigin: Item.Center
+        clip: true
+
+        Loader {
+            id: screenLoader
+            anchors.fill: parent
+            sourceComponent: {
+                switch (appController.screen) {
+                case "login": return loginScreen
+                case "settings": return settingsScreen
+                case "laser-treatment": return laserTreatmentScreen
+                case "system-info": return systemInfoScreen
+                default: return startScreen
+                }
             }
         }
-    }
 
-    ErrorDialog {
-        anchors.fill: parent
-        titleText: appController.errorTitle
-        messageText: appController.errorMessage
-        visible: appController.errorMessage.length > 0
-        onAccepted: appController.clearError()
+        ErrorDialog {
+            anchors.fill: parent
+            titleText: appController.errorTitle
+            messageText: appController.errorMessage
+            visible: appController.errorMessage.length > 0
+            onAccepted: appController.clearError()
+        }
     }
 
     Component { id: startScreen; StartScreen {} }

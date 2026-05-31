@@ -1,6 +1,6 @@
 # FitPro Ultima Laser rendszerarchitektura
 
-Ez a dokumentum a FitPro Ultima Laser aktualis szoftveres es hardverkozeli architekturajat foglalja ossze. A production kezelo felulet mar nem React/Chromium alapu web frontend, hanem nativ PySide6/QML kiosk alkalmazas a `qt_app/` mappaban. A regi React/Vite kod tovabbra is megtalalhato a repoban design- es osszehasonlitasi referenciakent.
+Ez a dokumentum a FitPro Ultima Laser aktualis szoftveres es hardverkozeli architekturajat foglalja ossze. A kezelo felulet nativ PySide6/QML kiosk alkalmazas a `qt_app/` mappaban.
 
 ## 1. Rendszerattekintes
 
@@ -23,7 +23,7 @@ STM32 / mikrokontroller
         +--> szenzorok: homerseklet, aram, feedback, allapotok
 ```
 
-A Qt app kozvetlenul a backend API-t hivja. Nincs Vite dev server, nincs Nginx statikus frontend kiszolgalas es nincs Chromium kiosk a normal Qt production flow-ban.
+A Qt app kozvetlenul a backend API-t hivja, kulon webes kiszolgalasi reteg nelkul.
 
 ## 2. Fobb komponensek
 
@@ -371,8 +371,6 @@ Ebben a repoban:
 - `qt_app/run-kiosk.sh`: kiosk indito script
 - `qt_app/systemd/fitpro-ultima-kiosk.service`: Qt kiosk systemd service minta
 - `deploy/hairkiller-backend.service`: backend systemd service minta
-- `src/`, `package.json`, `vite.config.ts`: regi React/Vite frontend, jelenleg legacy/reference
-- `deploy/frontend.nginx`, `deploy/test-frontend.nginx`, `deploy/chromium-kiosk.desktop`: regi Chromium/Nginx deployment artefaktumok
 
 Kapcsolodo backend repoban:
 
@@ -386,7 +384,6 @@ Kapcsolodo backend repoban:
 A jelenlegi repo es dokumentacio alapjan ezek a pontok tovabbi dontest vagy pontositast igenyelhetnek:
 
 - A backend service fajlban szereplo `backend.hk_backend_app:app` es a fejlesztoi doksiban szereplo `app.hk_full_app:app` kozotti production entrypoint egyeztetese.
-- A Qt app feature-paritasanak befejezese a regi React frontendhez kepest.
 - A production telepitesi utvonal veglegesitese: repo checkout vagy `/opt/fitpro-ultima-laser`.
 - Touchscreen kalibracio es X11/Wayland platform valasztas veglegesitese Jetsonon.
 - Automatikus Qt smoke tesztek es backend integration smoke tesztek bevezetese.

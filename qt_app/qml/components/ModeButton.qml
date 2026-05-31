@@ -5,10 +5,10 @@ Button {
     id: control
     property bool active: false
 
-    width: 115
-    height: 115
+    width: 112
+    height: 112
     flat: true
-    font.pixelSize: 28
+    font.pixelSize: 25
     font.bold: false
 
     contentItem: Text {
@@ -22,8 +22,8 @@ Button {
 
     background: Rectangle {
         radius: width / 2
-        color: control.active ? "#55fa7e4e" : "transparent"
-        border.width: control.active ? 5 : 3
+        color: control.active ? "#88b56d5f" : "transparent"
+        border.width: control.active ? 7 : 3
         border.color: "#ffffff"
     }
 }

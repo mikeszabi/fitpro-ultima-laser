@@ -3,25 +3,22 @@ import QtQuick.Controls
 
 Button {
     id: control
-    text: "<"
-    width: 76
-    height: 76
+    text: "< BACK"
+    width: 112
+    height: 44
     flat: true
-    font.pixelSize: 34
-    font.bold: true
+    font.pixelSize: 20
+    font.bold: false
 
     contentItem: Text {
         text: control.text
-        color: "#ecfffb"
+        color: "#ffffff"
         font: control.font
-        horizontalAlignment: Text.AlignHCenter
+        horizontalAlignment: Text.AlignLeft
         verticalAlignment: Text.AlignVCenter
     }
 
     background: Rectangle {
-        radius: 38
-        color: control.down ? "#1a5551" : "#123b39"
-        border.color: "#72d8cc"
-        border.width: 1
+        color: "transparent"
     }
 }

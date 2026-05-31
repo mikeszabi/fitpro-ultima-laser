@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import "../components"
 
 Item {
@@ -7,52 +6,55 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "../../../public/assets/Background.png"
+        source: "../../assets/images/Background.png"
         fillMode: Image.PreserveAspectCrop
-        opacity: 0.35
     }
 
-    ColumnLayout {
+    Rectangle {
         anchors.fill: parent
-        anchors.margins: 92
-        spacing: 32
+        color: "#33000000"
+    }
 
-        Item { Layout.fillHeight: true }
+    Item {
+        x: 204
+        y: 184
+        width: 672
+        height: 866
 
         Image {
-            source: "../../../public/assets/ULTIMA.png"
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 560
-            Layout.preferredHeight: 220
+            id: uMark
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 0
+            width: 672
+            height: 672
+            source: "../../assets/images/Ultima-logo.png"
+            fillMode: Image.PreserveAspectFit
+        }
+
+        Image {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 710
+            width: 650
+            height: 166
+            source: "../../assets/images/ULTIMA.png"
             fillMode: Image.PreserveAspectFit
         }
 
         Text {
-            Layout.fillWidth: true
+            x: 720
+            y: 813
             text: "LASER"
-            color: "#f6fffd"
-            font.pixelSize: 72
-            font.bold: true
-            horizontalAlignment: Text.AlignHCenter
+            color: "#ffffff"
+            font.pixelSize: 51
         }
 
-        Item { Layout.preferredHeight: 180 }
-
         AppButton {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 360
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 891
+            width: 366
+            height: 72
             text: "Get started"
-            onClicked: appController.navigate("laser-treatment")
+            onClicked: appController.navigate("login")
         }
-
-        AppButton {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 360
-            text: "Settings"
-            accent: "#2d5964"
-            onClicked: appController.navigate("settings")
-        }
-
-        Item { Layout.fillHeight: true }
     }
 }

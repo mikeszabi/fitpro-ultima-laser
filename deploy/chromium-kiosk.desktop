@@ -1,6 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Chromium Kiosk
-Exec=chromium --kiosk --no-first-run --simulate-outdated-no-new-window --start-fullscreen --noerrdialogs --disable-infobars --disable-features=Translate,BubbleKeycaseTrigger,SidePanel --disable-session-crashed-bubble "http://localhost"
-X-GNOME-Autostart-enabled=true
-Terminal=false

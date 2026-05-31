@@ -32,6 +32,14 @@ FITPRO_API_BASE_URL=http://127.0.0.1:8000 python main.py --windowed
 
 A `run-kiosk.sh` kikapcsolja az X11 képernyővédőt és a DPMS blankinget, majd fullscreen módban indítja az appot. Fejlesztéshez használd a `python main.py --windowed` parancsot.
 
+Széles kijelzőn, ahol a teljes portré UI-nak látszania kell:
+
+```bash
+./run-wide.sh
+```
+
+A `run-wide.sh` ugyanúgy fullscreen módban indul, de a 1080x1920-as kezelőfelületet arányosan lekicsinyíti, hogy landscape monitoron se vágódjon le.
+
 ## Touchscreen ellenőrzés Jetsonon
 
 ```bash
@@ -66,7 +74,7 @@ qt_app/
 
 ## Design and language
 
-The QML interface is intentionally aligned with the existing React frontend: Ultima wave background, portrait 1080x1920 composition, white rounded treatment panels, vertical output bars, circular treatment mode controls, and the circular camera/status section. The native UI text is English.
+The QML interface is intentionally aligned with the Ultima visual design: wave background, portrait 1080x1920 composition, white rounded treatment panels, vertical output bars, circular treatment mode controls, and the circular camera/status section. The native UI text is English.
 
 ## Jelenlegi állapot
 
@@ -81,4 +89,4 @@ Az első natív verzió a fő kezelési flow-t tartalmazza:
 - kamera frame frissítés `/frame/current` alapján
 - laser arm/disarm, red dot, vacuum, capture/load targets, fire, stop parancsok
 
-Ez még nem teljes feature-paritás a React alkalmazással, hanem a Jetsonon futtatható natív alap.
+Ez a Jetsonon futtatható natív Qt alap.

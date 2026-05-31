@@ -7,10 +7,10 @@ Button {
     property color accent: "#ff9b00"
     signal armedTriggered()
 
-    text: holdTimer.running ? "TARTSD..." : "FIRE"
-    implicitHeight: 90
-    font.pixelSize: 42
-    font.bold: true
+    text: holdTimer.running ? "HOLD" : "FIRE"
+    implicitHeight: 92
+    font.pixelSize: 38
+    font.bold: false
     flat: true
 
     onPressed: {
@@ -44,7 +44,7 @@ Button {
     background: Rectangle {
         id: bg
         radius: height / 2
-        color: control.down ? Qt.darker(control.accent, 1.25) : control.accent
+        color: control.down ? "#33210a" : "transparent"
         opacity: control.enabled ? 1.0 : 0.62
         border.width: 3
         border.color: control.accent
