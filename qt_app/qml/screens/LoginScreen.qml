@@ -5,6 +5,17 @@ import "../components"
 Item {
     anchors.fill: parent
 
+    Image {
+        anchors.fill: parent
+        source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        fillMode: Image.PreserveAspectCrop
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#26000000"
+    }
+
     BackButton {
         x: 32
         y: 30
@@ -27,7 +38,7 @@ Item {
         y: 318
         width: 690
         height: 240
-        source: "../../assets/images/ULTIMA.png"
+        source: "../../assets/images/xd-new/ultima-wordmark.png"
         fillMode: Image.PreserveAspectFit
     }
 

@@ -6,7 +6,7 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "../../assets/images/Background.png"
+        source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
         fillMode: Image.PreserveAspectCrop
     }
 
@@ -15,46 +15,40 @@ Item {
         color: "#33000000"
     }
 
-    Item {
+    Image {
         x: 204
-        y: 184
-        width: 672
-        height: 866
+        y: 249
+        width: 673
+        height: 787
+        source: "../../assets/images/xd-new/ultima-u-mark.png"
+        fillMode: Image.PreserveAspectFit
+    }
 
-        Image {
-            id: uMark
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: 0
-            width: 672
-            height: 672
-            source: "../../assets/images/Ultima-logo.png"
-            fillMode: Image.PreserveAspectFit
-        }
+    Image {
+        x: 204
+        y: 1252
+        width: 673
+        height: 252
+        source: "../../assets/images/xd-new/ultima-wordmark.png"
+        fillMode: Image.PreserveAspectFit
+    }
 
-        Image {
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: 710
-            width: 650
-            height: 166
-            source: "../../assets/images/ULTIMA.png"
-            fillMode: Image.PreserveAspectFit
-        }
+    Text {
+        x: 804
+        y: 1447
+        text: "LASER"
+        color: "#ffffff"
+        font.pixelSize: 60
+    }
 
-        Text {
-            x: 720
-            y: 813
-            text: "LASER"
-            color: "#ffffff"
-            font.pixelSize: 51
-        }
-
-        AppButton {
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: 891
-            width: 366
-            height: 72
-            text: "Get started"
-            onClicked: appController.navigate("login")
-        }
+    AppButton {
+        x: 356
+        y: 1469
+        width: 368
+        height: 71
+        text: "Get started"
+        borderWidth: 5
+        font.pixelSize: 22
+        onClicked: appController.navigate("login")
     }
 }

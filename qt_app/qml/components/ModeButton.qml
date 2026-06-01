@@ -22,8 +22,18 @@ Button {
 
     background: Rectangle {
         radius: width / 2
-        color: control.active ? "#88b56d5f" : "transparent"
+        color: control.active ? "#8fb56d5f" : "#09000000"
         border.width: control.active ? 7 : 3
         border.color: "#ffffff"
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 4
+            radius: width / 2
+            visible: control.active
+            color: "transparent"
+            border.width: 2
+            border.color: "#ffc1b5"
+        }
     }
 }

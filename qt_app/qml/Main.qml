@@ -25,7 +25,7 @@ ApplicationWindow {
 
     Image {
         anchors.fill: parent
-        source: "../assets/images/Background-2.png"
+        source: "../assets/images/xd-new/abstract-wave-bg.jpg"
         fillMode: Image.PreserveAspectCrop
     }
 

@@ -6,6 +6,7 @@ Button {
     property color accent: "#ffffff"
     property color danger: "#dc4f5d"
     property color textColor: "#ffffff"
+    property int borderWidth: 3
 
     implicitHeight: 58
     font.pixelSize: 18
@@ -23,17 +24,17 @@ Button {
 
     background: Rectangle {
         radius: height / 2
-        color: control.down ? "#26ffffff" : "transparent"
+        color: control.down ? "#2affffff" : "#05000000"
         opacity: control.enabled ? 1.0 : 0.45
-        border.width: 4
+        border.width: control.borderWidth
         border.color: control.accent
         clip: true
 
         Rectangle {
-            width: parent.width * 0.38
+            width: parent.width * 0.40
             height: parent.height
             radius: parent.radius
-            opacity: control.down ? 0.72 : 0.58
+            opacity: control.down ? 0.82 : 0.68
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "#f2ffffff" }
                 GradientStop { position: 1.0; color: "#00ffffff" }

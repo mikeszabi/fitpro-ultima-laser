@@ -12,7 +12,7 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "../../assets/images/Background-1.png"
+        source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
         fillMode: Image.PreserveAspectCrop
     }
 
@@ -35,7 +35,7 @@ Item {
     }
 
     component Panel: Rectangle {
-        color: "#8a000000"
+        color: "#18000000"
         radius: 39
         border.color: "#ffffff"
         border.width: 3
@@ -60,7 +60,7 @@ Item {
             y: 108
             width: 260
             height: 132
-            source: "../../assets/images/calibration-device.png"
+            source: "../../assets/images/xd-new/calibration-device.png"
             fillMode: Image.PreserveAspectFit
         }
 
@@ -175,10 +175,10 @@ Item {
 
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 40
-                width: 108
-                height: 118
-                radius: 54
+                y: 34
+                width: 112
+                height: 132
+                radius: 56
                 color: "transparent"
                 border.color: hairColorControl.selected ? "#ff7045" : "transparent"
                 border.width: hairColorControl.selected ? 4 : 0
@@ -186,16 +186,16 @@ Item {
 
             Image {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 48
-                width: 92
-                height: 104
+                y: 28
+                width: 74
+                height: 138
                 source: hairColorControl.img
                 fillMode: Image.PreserveAspectFit
             }
 
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 160
+                y: 166
                 width: parent.width
                 text: hairColorControl.label
                 color: hairColorControl.selected ? "#ff7045" : "#ffffff"
@@ -216,12 +216,12 @@ Item {
             height: 188
             spacing: 0
 
-            HairColor { img: "../../assets/images/haircolors/hf.png"; label: "Black"; selected: root.selectedHairColor === 0; onClicked: root.selectedHairColor = 0 }
-            HairColor { img: "../../assets/images/haircolors/e.png"; label: "Dark Brown"; selected: root.selectedHairColor === 1; onClicked: root.selectedHairColor = 1 }
-            HairColor { img: "../../assets/images/haircolors/vv.png"; label: "Brown"; selected: root.selectedHairColor === 2; onClicked: root.selectedHairColor = 2 }
-            HairColor { img: "../../assets/images/haircolors/n.png"; label: "Grey/White"; selected: root.selectedHairColor === 3; onClicked: root.selectedHairColor = 3 }
-            HairColor { img: "../../assets/images/haircolors/dd.png"; label: "Blonde"; selected: root.selectedHairColor === 4; onClicked: root.selectedHairColor = 4 }
-            HairColor { img: "../../assets/images/haircolors/h.png"; label: "Red"; selected: root.selectedHairColor === 5; onClicked: root.selectedHairColor = 5 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/black.png"; label: "Black"; selected: root.selectedHairColor === 0; onClicked: root.selectedHairColor = 0 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/dark-brown.png"; label: "Dark Brown"; selected: root.selectedHairColor === 1; onClicked: root.selectedHairColor = 1 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/brown.png"; label: "Brown"; selected: root.selectedHairColor === 2; onClicked: root.selectedHairColor = 2 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/grey-white.png"; label: "Grey/White"; selected: root.selectedHairColor === 3; onClicked: root.selectedHairColor = 3 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/blonde.png"; label: "Blonde"; selected: root.selectedHairColor === 4; onClicked: root.selectedHairColor = 4 }
+            HairColor { img: "../../assets/images/xd-new/haircolors/red.png"; label: "Red"; selected: root.selectedHairColor === 5; onClicked: root.selectedHairColor = 5 }
         }
     }
 

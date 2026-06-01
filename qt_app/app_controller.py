@@ -57,9 +57,9 @@ class AppController(QObject):
         self._api_status = "Backend: checking"
         self._busy = False
         self._laser_ready = False
-        self._p808 = 12
-        self._p980 = 12
-        self._p1064 = 12
+        self._p808 = 0
+        self._p980 = 0
+        self._p1064 = 0
         self._pulse_width = 80
         self._red_dot = False
         self._vacuum_enabled = False

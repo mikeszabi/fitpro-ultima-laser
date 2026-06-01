@@ -14,8 +14,13 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "../../assets/images/Background-1.png"
+        source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
         fillMode: Image.PreserveAspectCrop
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#26000000"
     }
 
     Timer {
@@ -56,70 +61,75 @@ Item {
         width: 520
         height: 48
         text: "Laser Treatment"
-        font.pixelSize: 34
+        font.pixelSize: 40
         horizontalAlignment: Text.AlignHCenter
     }
 
     Row {
-        x: 118
-        y: 170
+        x: 76
+        y: 164
         width: 844
         height: 44
         spacing: 18
 
-        FitText { width: 238; height: 44; text: "Skin type: III."; font.pixelSize: 23; horizontalAlignment: Text.AlignHCenter }
-        FitText { width: 314; height: 44; text: "Hair color: Dark Brown"; font.pixelSize: 23; horizontalAlignment: Text.AlignHCenter }
-        FitText { width: 238; height: 44; text: "Hair type: Medium"; font.pixelSize: 23; horizontalAlignment: Text.AlignHCenter }
+        FitText { width: 238; height: 44; text: "Skin type: III."; font.pixelSize: 30; horizontalAlignment: Text.AlignHCenter }
+        FitText { width: 314; height: 44; text: "Hair color: Dark Brown"; font.pixelSize: 30; horizontalAlignment: Text.AlignHCenter }
+        FitText { width: 238; height: 44; text: "Hair type: Medium"; font.pixelSize: 30; horizontalAlignment: Text.AlignHCenter }
     }
 
     component Panel: Rectangle {
-        color: "#92000000"
+        color: "#18000000"
         radius: 39
         border.color: "#ffffff"
         border.width: 3
     }
 
     Panel {
+        id: outputPanel
         x: 58
         y: 246
         width: 952
-        height: 618
+        height: 620
+        readonly property int powerRulerLabelX: 94
+        readonly property int powerRulerTickX: 162
+        readonly property int pulseRulerTickX: pulseSlider.x + pulseSlider.width + 10
+        readonly property int pulseRulerLabelX: pulseRulerTickX + 30
 
         FitText {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 12
+            y: -2
             width: 520
             height: 48
             text: "Output Performance"
-            font.pixelSize: 34
+            font.pixelSize: 40
             horizontalAlignment: Text.AlignHCenter
         }
 
         FitText {
-            x: 54
+            x: outputPanel.powerRulerLabelX
             y: p808Slider.y + p808Slider.scaleTop - height / 2
             width: 52
             height: 24
             text: "15W"
-            font.pixelSize: 16
+            font.pixelSize: 20
             horizontalAlignment: Text.AlignRight
         }
         FitText {
-            x: 54
+            x: outputPanel.powerRulerLabelX
             y: p808Slider.y + p808Slider.scaleTop + p808Slider.scaleHeight - height / 2
             width: 52
             height: 24
             text: "0W"
-            font.pixelSize: 16
+            font.pixelSize: 20
             horizontalAlignment: Text.AlignRight
         }
 
         Repeater {
-            model: 11
+            model: 17
             Rectangle {
-                x: 154
-                y: p808Slider.y + p808Slider.scaleTop - height / 2 + index * (p808Slider.scaleHeight / 10)
-                width: index % 2 === 0 ? 24 : 14
+                x: outputPanel.powerRulerTickX
+                y: p808Slider.y + p808Slider.scaleTop - height / 2 + index * (p808Slider.scaleHeight / 16)
+                width: index % 4 === 0 ? 24 : 14
                 height: 2
                 color: "#cfd5db"
             }
@@ -134,6 +144,7 @@ Item {
             minValue: 0
             maxValue: 15
             fillColor: "#9b0000"
+            offZoneEndValue: 1
             bottomText: appController.p808 + "W"
             onChanged: function(value) { appController.setPower("p808", value) }
         }
@@ -146,6 +157,7 @@ Item {
             minValue: 0
             maxValue: 15
             fillColor: "#f00012"
+            offZoneEndValue: 1
             bottomText: appController.p980 + "W"
             onChanged: function(value) { appController.setPower("p980", value) }
         }
@@ -158,61 +170,36 @@ Item {
             minValue: 0
             maxValue: 15
             fillColor: "#ff4a12"
+            offZoneEndValue: 1
             bottomText: appController.p1064 + "W"
             onChanged: function(value) { appController.setPower("p1064", value) }
         }
 
-        FitText { x: 588; y: 372; width: 166; height: 32; text: "RED DOT"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter }
-        Rectangle {
-            x: 590
-            y: 412
-            width: 160
-            height: 44
-            radius: 22
-            color: "#161722"
-            border.color: "#ffffff"
-            border.width: 1
-            Rectangle {
-                x: appController.redDot ? 0 : 80
-                width: 80
-                height: parent.height
-                radius: 22
-                gradient: Gradient {
-                    GradientStop { position: 0; color: appController.redDot ? "#ff6565" : "#4d4d55" }
-                    GradientStop { position: 1; color: appController.redDot ? "#c40011" : "#111118" }
-                }
-            }
-            Text { x: 22; anchors.verticalCenter: parent.verticalCenter; text: "ON"; color: "#ffffff"; font.pixelSize: 22 }
-            Text { x: 96; anchors.verticalCenter: parent.verticalCenter; text: "OFF"; color: "#ffffff"; font.pixelSize: 22 }
-            MouseArea { anchors.fill: parent; onClicked: appController.setRedDot(!appController.redDot) }
-        }
-
-        FitText { x: 752; y: 92; width: 168; height: 24; text: "P.WIDTH"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter }
         FitText {
-            x: 876
+            x: outputPanel.pulseRulerLabelX
             y: pulseSlider.y + pulseSlider.scaleTop - height / 2
             width: 70
             height: 24
             text: "100ms"
-            font.pixelSize: 15
+            font.pixelSize: 20
             horizontalAlignment: Text.AlignLeft
         }
         FitText {
-            x: 876
+            x: outputPanel.pulseRulerLabelX
             y: pulseSlider.y + pulseSlider.scaleTop + pulseSlider.scaleHeight - height / 2
             width: 70
             height: 24
             text: "10ms"
-            font.pixelSize: 15
+            font.pixelSize: 20
             horizontalAlignment: Text.AlignLeft
         }
 
         Repeater {
-            model: 10
+            model: 11
             Rectangle {
-                x: 884
-                y: pulseSlider.y + pulseSlider.scaleTop - height / 2 + index * (pulseSlider.scaleHeight / 9)
-                width: index % 3 === 0 ? 22 : 12
+                x: outputPanel.pulseRulerTickX
+                y: pulseSlider.y + pulseSlider.scaleTop - height / 2 + index * (pulseSlider.scaleHeight / 10)
+                width: index % 5 === 0 ? 22 : 12
                 height: 2
                 color: "#cfd5db"
             }
@@ -220,9 +207,9 @@ Item {
 
         PowerControl {
             id: pulseSlider
-            x: 792
-            y: 126
-            label: ""
+            x: 700
+            y: 92
+            label: "P.WIDTH"
             value: Math.min(100, Math.max(10, Math.round(appController.pulseWidth)))
             minValue: 10
             maxValue: 100
@@ -233,11 +220,11 @@ Item {
 
         FitText {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 558
-            width: 620
+            y: 550
+            width: 720
             height: 38
-            text: "Total Output Power: " + appController.totalPower + " W"
-            font.pixelSize: 24
+            text: "Total Output Power: " + appController.totalPower + " W        J/cm2"
+            font.pixelSize: 30
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -250,11 +237,11 @@ Item {
 
         FitText {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 12
+            y: -2
             width: 420
             height: 46
             text: "Treatment Mode"
-            font.pixelSize: 34
+            font.pixelSize: 40
             horizontalAlignment: Text.AlignHCenter
         }
 
@@ -288,7 +275,7 @@ Item {
         height: 42
         text: "LASER MODULE TEMP: <span style='color:#00d723'>21°C</span>"
         textFormat: Text.RichText
-        font.pixelSize: 24
+        font.pixelSize: 30
         horizontalAlignment: Text.AlignHCenter
     }
 
@@ -321,7 +308,7 @@ Item {
             Image {
                 anchors.fill: parent
                 anchors.margins: 7
-                source: appController.cameraFrameUrl !== "" ? appController.cameraFrameUrl : "../../assets/images/scan-target.webp"
+                source: appController.cameraFrameUrl !== "" ? appController.cameraFrameUrl : "../../assets/images/xd-new/scan-target.png"
                 asynchronous: true
                 retainWhileLoading: true
                 cache: false

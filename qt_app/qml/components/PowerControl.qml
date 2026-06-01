@@ -8,14 +8,17 @@ Item {
     property int maxValue: 100
     property int step: 1
     property color fillColor: "#ff4d0b"
+    property color offZoneColor: "#6f747c"
+    property int offZoneEndValue: minValue
     property string bottomText: value.toString()
     readonly property real scaleTop: (label.length > 0 ? topLabel.implicitHeight : 0) + 12
-    readonly property real scaleHeight: 282
+    readonly property real scaleHeight: 358
     readonly property real fillRatio: maxValue === minValue ? 0 : Math.max(0, Math.min(1, (value - minValue) / (maxValue - minValue)))
+    readonly property real offZoneRatio: maxValue === minValue ? 0 : Math.max(0, Math.min(1, (offZoneEndValue - minValue) / (maxValue - minValue)))
     signal changed(int value)
 
-    width: 86
-    height: 390
+    width: 88
+    height: 430
 
     Text {
         id: topLabel
@@ -25,7 +28,7 @@ Item {
         height: visible ? implicitHeight : 0
         text: root.label
         color: "#ffffff"
-        font.pixelSize: 16
+        font.pixelSize: 20
         horizontalAlignment: Text.AlignHCenter
     }
 
@@ -34,12 +37,12 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: topLabel.bottom
         anchors.topMargin: 12
-        width: 76
+        width: 78
         height: root.scaleHeight
-        radius: 17
-        color: "#11131e"
-        border.color: "#273041"
-        border.width: 2
+        radius: 18
+        color: "#111219"
+        border.color: "#05060a"
+        border.width: 3
         clip: true
 
         Rectangle {
@@ -53,15 +56,33 @@ Item {
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
+            anchors.bottom: valueReadout.top
+            height: (parent.height - valueReadout.height) * root.offZoneRatio
+            visible: root.offZoneRatio > 0
+            color: root.offZoneColor
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: "transparent"
+            border.width: 1
+            border.color: "#2f3442"
+        }
+
+        Rectangle {
+            id: valueReadout
+            anchors.left: parent.left
+            anchors.right: parent.right
             anchors.bottom: parent.bottom
-            height: 32
+            height: 34
             color: "#050506"
 
             Text {
                 anchors.centerIn: parent
                 text: root.bottomText
                 color: "#ffffff"
-                font.pixelSize: 15
+                font.pixelSize: 16
             }
         }
 
