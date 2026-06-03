@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -46,6 +47,7 @@ class AppController(QObject):
     _cameraFrameFailed = Signal(str, object)
     _taskFinished = Signal(str, object, object, bool, object)
     _taskFailed = Signal(str, str, bool, object)
+    _streamLog = Signal(str)
 
     def __init__(self, api: ApiClient | None = None) -> None:
         super().__init__()
@@ -57,10 +59,10 @@ class AppController(QObject):
         self._api_status = "Backend: checking"
         self._busy = False
         self._laser_ready = False
-        self._p808 = 0
-        self._p980 = 0
-        self._p1064 = 0
-        self._pulse_width = 80
+        self._p808 = 20
+        self._p980 = 25
+        self._p1064 = 50
+        self._pulse_width = 50
         self._red_dot = False
         self._vacuum_enabled = False
         self._vacuum_lock = False
@@ -69,11 +71,22 @@ class AppController(QObject):
         self._loaded_target_count = 0
         self._confidence = 0.1
         self._treatment_mode = "semi-auto"
+        self._detection_enabled = False
+        self._overlay_enabled = False
+        self._app_state = "-"
+        self._target_state = "-"
+        self._target_error_clear = True
+        self._app_state_running = False
+        self._laser_temp = "-"
+        self._settings_dirty = True
+        self._treatment_log = ""
         self._camera_frame_dir = Path(tempfile.gettempdir()) / "fitpro-ultima-laser"
         self._camera_frame_dir.mkdir(parents=True, exist_ok=True)
         self._camera_frame_slot = 0
         self._camera_refresh_in_flight = False
         self._camera_frame_url = ""
+        self._treatment_stream_stop: threading.Event | None = None
+        self._treatment_stream_thread: threading.Thread | None = None
         self._error_title = ""
         self._error_message = ""
 
@@ -81,6 +94,7 @@ class AppController(QObject):
         self._cameraFrameFailed.connect(self._handle_camera_frame_failed)
         self._taskFinished.connect(self._handle_task_finished)
         self._taskFailed.connect(self._handle_task_failed)
+        self._streamLog.connect(self._append_log)
 
     @Property(str, notify=screenChanged)
     def screen(self) -> str:
@@ -110,9 +124,21 @@ class AppController(QObject):
     def p1064(self) -> int:
         return self._p1064
 
-    @Property(int, notify=powerChanged)
-    def totalPower(self) -> int:
-        return self._p808 + self._p980 + self._p1064
+    @Property(float, notify=powerChanged)
+    def totalPower(self) -> float:
+        return self.p808Watts + self.p980Watts + self.p1064Watts
+
+    @Property(float, notify=powerChanged)
+    def p808Watts(self) -> float:
+        return self._percent_to_watts(self._p808)
+
+    @Property(float, notify=powerChanged)
+    def p980Watts(self) -> float:
+        return self._percent_to_watts(self._p980)
+
+    @Property(float, notify=powerChanged)
+    def p1064Watts(self) -> float:
+        return self._percent_to_watts(self._p1064)
 
     @Property(int, notify=pulseWidthChanged)
     def pulseWidth(self) -> int:
@@ -150,9 +176,53 @@ class AppController(QObject):
     def treatmentMode(self) -> str:
         return self._treatment_mode
 
+    @Property(bool, notify=targetChanged)
+    def detectionEnabled(self) -> bool:
+        return self._detection_enabled
+
+    @Property(bool, notify=targetChanged)
+    def overlayEnabled(self) -> bool:
+        return self._overlay_enabled
+
+    @Property(str, notify=targetChanged)
+    def appState(self) -> str:
+        return self._app_state
+
+    @Property(str, notify=targetChanged)
+    def targetState(self) -> str:
+        return self._target_state
+
+    @Property(bool, notify=targetChanged)
+    def targetErrorClear(self) -> bool:
+        return self._target_error_clear
+
+    @Property(bool, notify=targetChanged)
+    def appStateRunning(self) -> bool:
+        return self._app_state_running
+
+    @Property(str, notify=targetChanged)
+    def laserTemp(self) -> str:
+        return self._laser_temp
+
+    @Property(bool, notify=targetChanged)
+    def settingsDirty(self) -> bool:
+        return self._settings_dirty
+
+    @Property(str, notify=targetChanged)
+    def treatmentLog(self) -> str:
+        return self._treatment_log
+
+    @Property(str, notify=targetChanged)
+    def treatmentLogHead(self) -> str:
+        return self._treatment_log.splitlines()[0] if self._treatment_log else ""
+
     @Property(str, notify=cameraFrameUrlChanged)
     def cameraFrameUrl(self) -> str:
         return self._camera_frame_url
+
+    @Property(str, notify=targetChanged)
+    def liveCameraFrameUrl(self) -> str:
+        return self._api.current_frame_url()
 
     @Property(str, notify=errorChanged)
     def errorTitle(self) -> str:
@@ -166,6 +236,8 @@ class AppController(QObject):
     def navigate(self, screen: str) -> None:
         if self._screen == screen:
             return
+        if self._screen == "laser-treatment" and screen != "laser-treatment":
+            self.stopTreatmentCameraStream()
         self._screen = screen
         self.screenChanged.emit()
         if screen == "laser-treatment":
@@ -179,6 +251,8 @@ class AppController(QObject):
 
     @Slot()
     def refreshCameraFrame(self) -> None:
+        if self._busy:
+            return
         if self._camera_refresh_in_flight:
             return
 
@@ -186,7 +260,10 @@ class AppController(QObject):
 
         def task() -> str:
             timestamp = int(time.time() * 1000)
-            payload = self._api.snapshot_bytes(timestamp)
+            if self._overlay_enabled or self._loaded_target_count > 0:
+                payload = self._api.current_frame_bytes(timestamp)
+            else:
+                payload = self._api.snapshot_bytes(timestamp)
             if not self._is_supported_image(payload):
                 raise ValueError("Snapshot response is not a supported image")
 
@@ -211,14 +288,8 @@ class AppController(QObject):
     def syncBackend(self) -> None:
         def task() -> dict[str, Any]:
             health = self._api.health()
-            laser = self._api.laser_settings()
-            detection = self._api.detection_status()
-            stats = self._api.stats()
             return {
                 "health": health,
-                "laser": laser,
-                "detection": detection,
-                "stats": stats,
             }
 
         self._run("Backend sync", task, self._apply_backend_state, busy=False)
@@ -227,20 +298,13 @@ class AppController(QObject):
     def setLaserReady(self, enabled: bool) -> None:
         def task() -> bool:
             self._api.arm_laser(enabled)
-            self._api.update_laser_settings(
-                enabled,
-                self._p808,
-                self._p980,
-                self._p1064,
-                self._pulse_width,
-            )
             return enabled
 
         self._run("Laser arm" if enabled else "Laser disarm", task, self._apply_laser_ready)
 
-    @Slot(str, int)
-    def setPower(self, channel: str, value: int) -> None:
-        value = max(0, min(15, int(value)))
+    @Slot(str, float)
+    def setPower(self, channel: str, value: float) -> None:
+        value = self._watts_to_percent(value)
         if channel == "p808":
             self._p808 = value
         elif channel == "p980":
@@ -251,13 +315,15 @@ class AppController(QObject):
             return
 
         self.powerChanged.emit()
-        self._push_laser_settings()
+        self._settings_dirty = True
+        self.targetChanged.emit()
 
     @Slot(int)
     def setPulseWidth(self, value: int) -> None:
-        self._pulse_width = max(10, min(100, int(value)))
+        self._pulse_width = max(10, min(1000, int(value)))
         self.pulseWidthChanged.emit()
-        self._push_laser_settings()
+        self._settings_dirty = True
+        self.targetChanged.emit()
 
     @Slot(bool)
     def setRedDot(self, enabled: bool) -> None:
@@ -275,12 +341,20 @@ class AppController(QObject):
     def setTreatmentMode(self, mode: str) -> None:
         if mode not in {"auto", "semi-auto", "manual"}:
             return
-        self._treatment_mode = mode
-        self.targetChanged.emit()
+        api_mode = self._mode_to_api(mode)
+
+        def task() -> Any:
+            return self._api.set_treatment_app_mode(api_mode)
+
+        self._run(
+            f"Mode {mode.upper()}",
+            task,
+            lambda result: self._apply_treatment_status(result, fallback_mode=mode),
+        )
 
     @Slot(float)
     def setConfidence(self, confidence: float) -> None:
-        confidence = max(0.01, min(1.0, float(confidence)))
+        confidence = max(0.0, min(0.2, float(confidence)))
 
         def task() -> float:
             self._api.set_detection_confidence(confidence)
@@ -290,29 +364,107 @@ class AppController(QObject):
 
     @Slot()
     def captureAndLoadTargets(self) -> None:
-        def task() -> int:
+        self.detectTargets()
+
+    @Slot()
+    def applyLaserSettings(self) -> None:
+        self._run("Laser settings", self._apply_settings_task, self._apply_treatment_status)
+
+    @Slot()
+    def initializeTreatmentPage(self) -> None:
+        self.startTreatmentCameraStream()
+
+        def task() -> Any:
+            self._api.startup_clean_state()
+            self._api.set_treatment_app_mode("semi_auto")
+            return {"mode": "semi_auto", "clean_state": True}
+
+        self._run("Treatment init", task, self._apply_cleanup_state)
+
+    @Slot()
+    def startTreatmentCameraStream(self) -> None:
+        if self._treatment_stream_thread is not None and self._treatment_stream_thread.is_alive():
+            return
+
+        stop_event = threading.Event()
+        self._treatment_stream_stop = stop_event
+
+        def stream_task() -> None:
+            while not stop_event.is_set():
+                try:
+                    self._api.keep_current_frame_stream_alive(stop_event)
+                except Exception as exc:
+                    if not stop_event.is_set():
+                        self._streamLog.emit(f"Camera stream: {exc}")
+                        time.sleep(2.5)
+
+        self._treatment_stream_thread = threading.Thread(
+            target=stream_task,
+            name="fitpro-treatment-camera-stream",
+            daemon=True,
+        )
+        self._treatment_stream_thread.start()
+
+    @Slot()
+    def stopTreatmentCameraStream(self) -> None:
+        if self._treatment_stream_stop is not None:
+            self._treatment_stream_stop.set()
+        self._treatment_stream_stop = None
+        self._treatment_stream_thread = None
+
+    @Slot()
+    def detectTargets(self) -> None:
+        def task() -> Any:
+            if self._settings_dirty:
+                self._apply_settings_task()
+            # Clear previous targets and points
             self._api.clear_targets()
             self._api.clear_points()
             self._api.show_targets(False)
-            capture = self._api.capture_detections()
-            captured = int(capture.get("captured", 0))
-            if captured <= 0:
-                return 0
-            targets = self._api.update_targets()
-            self._api.show_targets(True)
-            return int(targets.get("targets_count", captured))
+            
+            # Capture detections from camera
+            capture_result = self._api.capture_detections()
+            captured_count = capture_result.get("captured", 0) if capture_result else 0
+            
+            # Upload targets to backend if any were captured
+            targets_result = None
+            if captured_count > 0:
+                targets_result = self._api.update_targets()
+                # Show targets overlay
+                self._api.show_targets(True)
+            
+            # Always get full status to ensure laser_armed and other state is updated
+            status = self._api.treatment_app_status()
+            
+            # Merge targets info with status
+            if targets_result:
+                status.update(targets_result)
+            
+            # Add capture info to log
+            if captured_count == 0:
+                status["detected_count"] = 0
+            
+            return status
 
-        self._run("Capture targets", task, self._apply_loaded_targets)
+        self._run("Detect targets", task, self._apply_treatment_status)
 
     @Slot()
     def fire(self) -> None:
         def task() -> Any:
-            self._api.set_sequence_mode(self._treatment_mode)
-            if self._treatment_mode in {"semi-auto", "manual"}:
-                return self._api.step_sequence()
-            return self._api.start_sequence()
+            if self._settings_dirty:
+                self._apply_settings_task()
+            return self._api.treatment_app_fire()
 
-        self._run("Fire sequence", task, lambda _: self.syncBackend())
+        self._run("Fire", task, self._apply_treatment_status)
+
+    @Slot()
+    def nextTarget(self) -> None:
+        def task() -> Any:
+            if self._settings_dirty:
+                self._apply_settings_task()
+            return self._api.treatment_app_next()
+
+        self._run("Next target", task, self._apply_treatment_status)
 
     @Slot()
     def stop(self) -> None:
@@ -323,6 +475,63 @@ class AppController(QObject):
                 self._api.clear_app_error()
 
         self._run("Stop sequence", task, lambda _: self.syncBackend())
+
+    @Slot()
+    def emergencyStop(self) -> None:
+        self._run("Emergency stop", self._api.treatment_app_emergency_stop, self._apply_treatment_status)
+
+    @Slot()
+    def cleanupStates(self) -> None:
+        def task() -> Any:
+            return self._api.startup_clean_state()
+
+        self._run("Cleanup states", task, self._apply_cleanup_state)
+
+    @Slot()
+    def checkStates(self) -> None:
+        self._run("Check states", self._api.treatment_app_status, self._apply_treatment_status, busy=False)
+
+    @Slot()
+    def toggleArm(self) -> None:
+        self.setLaserReady(not self._laser_ready)
+
+    @Slot()
+    def toggleVacuum(self) -> None:
+        self.setVacuumEnabled(not self._vacuum_enabled)
+
+    @Slot()
+    def toggleDetection(self) -> None:
+        enabled = not self._detection_enabled
+        self._run(
+            "Detection on" if enabled else "Detection off",
+            lambda: self._api.set_detection_enabled(enabled),
+            lambda _: self.checkStates(),
+        )
+
+    @Slot()
+    def toggleOverlay(self) -> None:
+        enabled = not self._overlay_enabled
+        self._run(
+            "Live overlay on" if enabled else "Live overlay off",
+            lambda: self._api.set_live_overlay_enabled(enabled),
+            lambda _: self.checkStates(),
+        )
+
+    @Slot()
+    def queryLaserTemp(self) -> None:
+        def task() -> str:
+            try:
+                data = self._api.sensor_values()
+                values = data.get("values", {}) if isinstance(data, dict) else {}
+                if "laserTemp_C" in values:
+                    return f"{values['laserTemp_C']} C"
+            except Exception:
+                pass
+            data = self._api.laser_temp()
+            temp = data.get("temp", "-") if isinstance(data, dict) else "-"
+            return f"{temp} C"
+
+        self._run("Laser temp", task, self._apply_laser_temp, busy=False)
 
     def _push_laser_settings(self) -> None:
         self._run(
@@ -337,6 +546,16 @@ class AppController(QObject):
             lambda _: None,
             busy=False,
         )
+
+    def _apply_settings_task(self) -> Any:
+        result = self._api.treatment_app_settings(
+            self._p808,
+            self._p980,
+            self._p1064,
+            self._pulse_width,
+        )
+        self._settings_dirty = False
+        return result
 
     def _run(
         self,
@@ -382,6 +601,7 @@ class AppController(QObject):
     ) -> None:
         on_success(result)
         self._set_status(f"{label}: OK")
+        self._append_log(f"{label}: OK")
         self._release_worker(worker)
         if busy:
             self._set_busy(False)
@@ -389,12 +609,15 @@ class AppController(QObject):
     @Slot(str, str, bool, object)
     def _handle_task_failed(self, label: str, message: str, busy: bool, worker: object) -> None:
         self._set_status(message)
+        self._append_log(f"{label}: {message}")
         self._error_title = label
         self._error_message = message
         self.errorChanged.emit()
         self._release_worker(worker)
         if busy:
             self._set_busy(False)
+        if label in {"Detect targets", "Fire", "Next target", "Cleanup states", "Emergency stop"}:
+            self.checkStates()
 
     def _release_worker(self, worker: object) -> None:
         try:
@@ -419,29 +642,14 @@ class AppController(QObject):
         self.busyChanged.emit()
 
     def _apply_backend_state(self, data: dict[str, Any]) -> None:
-        laser = data["laser"]
-        detection = data["detection"]
-        stats = data["stats"]
-
-        power = laser.get("power", {})
-        self._laser_ready = bool(laser.get("armed", False))
-        self._p808 = max(0, min(15, int(power.get("p808", self._p808))))
-        self._p980 = max(0, min(15, int(power.get("p980", self._p980))))
-        self._p1064 = max(0, min(15, int(power.get("p1064", self._p1064))))
-        self._pulse_width = max(10, min(100, int(laser.get("pulse_ms", self._pulse_width))))
-        self._confidence = float(detection.get("conf", self._confidence))
-        self._red_dot = bool(detection.get("red_dot") or stats.get("red_dot_enabled", False))
-        target_count = int(
-            laser.get("targets_count")
-            or stats.get("detected_points")
-            or stats.get("detection_count")
-            or 0
-        )
-        self._target = target_count > 0
-        self._targeted_follicles = target_count
-        self._loaded_target_count = int(laser.get("targets_count") or 0)
-
+        health = data.get("health", {})
+        if isinstance(health, dict):
+            camera_ready = bool(health.get("camera_ready", False))
+            camera_error = health.get("camera_error")
+            if not camera_ready and camera_error:
+                self._append_log(f"Camera: {camera_error}")
         self.laserStateChanged.emit()
+        self.vacuumChanged.emit()
         self.powerChanged.emit()
         self.pulseWidthChanged.emit()
         self.redDotChanged.emit()
@@ -458,6 +666,7 @@ class AppController(QObject):
     def _apply_vacuum_enabled(self, enabled: bool) -> None:
         self._vacuum_enabled = enabled
         self.vacuumChanged.emit()
+        self.checkStates()
 
     def _apply_confidence(self, confidence: float) -> None:
         self._confidence = confidence
@@ -468,3 +677,129 @@ class AppController(QObject):
         self._targeted_follicles = count
         self._loaded_target_count = count
         self.targetChanged.emit()
+
+    def _apply_laser_temp(self, value: str) -> None:
+        self._laser_temp = value
+        self.targetChanged.emit()
+
+    def _apply_cleanup_state(self, data: Any) -> None:
+        if isinstance(data, dict) and data.get("mode"):
+            self._treatment_mode = self._mode_from_api(str(data.get("mode")))
+
+        self._laser_ready = False
+        self._vacuum_enabled = False
+        self._detection_enabled = False
+        self._overlay_enabled = False
+        self._target = False
+        self._targeted_follicles = 0
+        self._loaded_target_count = 0
+        self._target_error_clear = True
+        self._app_state = "CLEAN"
+        self._target_state = "CLEAN"
+
+        self.laserStateChanged.emit()
+        self.vacuumChanged.emit()
+        self.powerChanged.emit()
+        self.pulseWidthChanged.emit()
+        self.targetChanged.emit()
+
+    def _apply_treatment_status(self, data: Any, fallback_mode: str | None = None) -> None:
+        if not isinstance(data, dict):
+            data = {}
+
+        mode = data.get("mode")
+        if mode:
+            self._treatment_mode = self._mode_from_api(str(mode))
+        elif fallback_mode:
+            self._treatment_mode = fallback_mode
+
+        self._laser_ready = bool(data.get("laser_armed", self._laser_ready))
+        vacuum = data.get("vacuum", {})
+        if isinstance(vacuum, dict):
+            self._vacuum_enabled = bool(vacuum.get("vacuum_on", self._vacuum_enabled))
+        self._detection_enabled = bool(data.get("detection_enabled", self._detection_enabled))
+        self._overlay_enabled = bool(
+            data.get("hair_detection_overlay_enabled", self._overlay_enabled)
+        )
+        self._target_error_clear = bool(data.get("target_error_clear", self._target_error_clear))
+        self._app_state_running = bool(data.get("app_state_running", self._app_state_running))
+        self._app_state = self._extract_payload(data.get("app_state", data.get("status", self._app_state)))
+        self._target_state = self._extract_payload(data.get("target_state", self._target_state))
+
+        target_count = int(data.get("loaded_targets", data.get("targets_count", self._loaded_target_count)) or 0)
+        if "manual_remaining" in data and self._treatment_mode == "manual":
+            target_count = int(data.get("manual_remaining") or 0)
+        self._target = target_count > 0
+        self._targeted_follicles = target_count
+        self._loaded_target_count = target_count
+
+        if "detection_conf" in data:
+            self._confidence = max(0.0, min(0.2, float(data.get("detection_conf") or self._confidence)))
+
+        power = data.get("laser_power", {})
+        if isinstance(power, dict):
+            self._p808 = max(0, min(100, int(power.get("p808", self._p808))))
+            self._p980 = max(0, min(100, int(power.get("p980", self._p980))))
+            self._p1064 = max(0, min(100, int(power.get("p1064", self._p1064))))
+
+        if data.get("pulse_ms") is not None:
+            self._pulse_width = max(10, min(1000, int(data.get("pulse_ms"))))
+
+        if "targets_count" in data or "detected_count" in data:
+            loaded = data.get("loaded_targets", data.get("targets_count", 0))
+            detected = data.get("detected_count", "-")
+            load_ms = data.get("load_ms")
+            suffix = "" if load_ms is None else f", load {load_ms} ms"
+            self._append_log(f"Targets loaded: {loaded}, detected: {detected}{suffix}")
+
+        capture = data.get("capture")
+        if isinstance(capture, dict) and capture.get("captured") == 0:
+            self._append_log("Detect returned 0 image points")
+
+        self.laserStateChanged.emit()
+        self.vacuumChanged.emit()
+        self.powerChanged.emit()
+        self.pulseWidthChanged.emit()
+        self.targetChanged.emit()
+
+    def _append_log(self, message: str) -> None:
+        stamp = time.strftime("%H:%M:%S")
+        self._treatment_log = f"[{stamp}] {message}\n{self._treatment_log}".strip()
+        lines = self._treatment_log.splitlines()
+        self._treatment_log = "\n".join(lines[:12])
+        self.targetChanged.emit()
+
+    @staticmethod
+    def _extract_payload(value: Any) -> str:
+        if isinstance(value, list):
+            value = " ".join(str(item) for item in value)
+        elif value is None:
+            return "-"
+        elif isinstance(value, dict):
+            return str(value)
+        else:
+            value = str(value)
+
+        marker = "->["
+        start = value.find(marker)
+        if start < 0:
+            return value or "-"
+        start += len(marker)
+        end = value.find("]", start)
+        return value[start:end] if end >= 0 else value[start:]
+
+    @staticmethod
+    def _mode_from_api(mode: str) -> str:
+        return "semi-auto" if mode == "semi_auto" else mode
+
+    @staticmethod
+    def _mode_to_api(mode: str) -> str:
+        return "semi_auto" if mode == "semi-auto" else mode
+
+    @staticmethod
+    def _percent_to_watts(percent: int | float) -> float:
+        return round(max(0.0, min(100.0, float(percent))) * 15.0 / 100.0, 1)
+
+    @staticmethod
+    def _watts_to_percent(watts: int | float) -> int:
+        return round(max(0.0, min(15.0, float(watts))) * 100.0 / 15.0)

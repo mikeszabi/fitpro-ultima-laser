@@ -91,22 +91,6 @@ cd qt_app
 
 ## Backend Setup
 
-The application connects to a FastAPI/uvicorn backend service. The service file is at `deploy/hairkiller-backend.service`.
-
-### Installation (First Time)
-
-```bash
-sudo cp deploy/hairkiller-backend.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable hairkiller-backend
-```
-
-### Start / Stop / Restart Backend
-
-```bash
-sudo systemctl start hairkiller-backend
-sudo systemctl stop hairkiller-backend
-sudo systemctl restart hairkiller-backend
 ```
 
 ### Check Backend Status and Logs

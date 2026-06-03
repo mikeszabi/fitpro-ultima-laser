@@ -9,7 +9,7 @@ User=jetson
 WorkingDirectory=/opt/fitpro-ultima-laser/qt_app
 Environment=DISPLAY=:0
 Environment=QT_QPA_PLATFORM=xcb
-Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000
+Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000/api
 ExecStart=/opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
 Restart=always
 RestartSec=2

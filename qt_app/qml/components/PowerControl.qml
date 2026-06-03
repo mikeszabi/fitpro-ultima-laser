@@ -3,10 +3,10 @@ import QtQuick
 Item {
     id: root
     property string label: ""
-    property int value: 0
-    property int minValue: 0
-    property int maxValue: 100
-    property int step: 1
+    property real value: 0
+    property real minValue: 0
+    property real maxValue: 100
+    property real step: 1
     property color fillColor: "#ff4d0b"
     property color offZoneColor: "#6f747c"
     property int offZoneEndValue: minValue
@@ -15,7 +15,7 @@ Item {
     readonly property real scaleHeight: 358
     readonly property real fillRatio: maxValue === minValue ? 0 : Math.max(0, Math.min(1, (value - minValue) / (maxValue - minValue)))
     readonly property real offZoneRatio: maxValue === minValue ? 0 : Math.max(0, Math.min(1, (offZoneEndValue - minValue) / (maxValue - minValue)))
-    signal changed(int value)
+    signal changed(real value)
 
     width: 88
     height: 430

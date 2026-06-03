@@ -4,6 +4,8 @@ import "../components"
 
 Item {
     anchors.fill: parent
+    
+    property bool logsVisible: false
 
     component FitText: Text {
         color: "#ffffff"
@@ -36,6 +38,13 @@ Item {
         repeat: true
         onTriggered: appController.refreshCameraFrame()
     }
+
+    Component.onCompleted: {
+        appController.initializeTreatmentPage()
+        appController.refreshCameraFrame()
+    }
+
+    Component.onDestruction: appController.stopTreatmentCameraStream()
 
     BackButton {
         x: 32
@@ -140,12 +149,13 @@ Item {
             x: 188
             y: 92
             label: "808 nm"
-            value: appController.p808
+            value: appController.p808Watts
             minValue: 0
             maxValue: 15
+            step: 0.5
             fillColor: "#9b0000"
             offZoneEndValue: 1
-            bottomText: appController.p808 + "W"
+            bottomText: appController.p808Watts.toFixed(1) + "W"
             onChanged: function(value) { appController.setPower("p808", value) }
         }
 
@@ -153,12 +163,13 @@ Item {
             x: 326
             y: 92
             label: "980 nm"
-            value: appController.p980
+            value: appController.p980Watts
             minValue: 0
             maxValue: 15
+            step: 0.5
             fillColor: "#f00012"
             offZoneEndValue: 1
-            bottomText: appController.p980 + "W"
+            bottomText: appController.p980Watts.toFixed(1) + "W"
             onChanged: function(value) { appController.setPower("p980", value) }
         }
 
@@ -166,12 +177,13 @@ Item {
             x: 464
             y: 92
             label: "1064 nm"
-            value: appController.p1064
+            value: appController.p1064Watts
             minValue: 0
             maxValue: 15
+            step: 0.5
             fillColor: "#ff4a12"
             offZoneEndValue: 1
-            bottomText: appController.p1064 + "W"
+            bottomText: appController.p1064Watts.toFixed(1) + "W"
             onChanged: function(value) { appController.setPower("p1064", value) }
         }
 
@@ -214,16 +226,28 @@ Item {
             minValue: 10
             maxValue: 100
             fillColor: "#4f86ff"
-            bottomText: appController.pulseWidth + "ms"
+            bottomText: Math.min(100, appController.pulseWidth) + "ms"
             onChanged: function(value) { appController.setPulseWidth(value) }
         }
 
+        AppButton {
+            x: 658
+            y: 526
+            width: 214
+            height: 58
+            text: appController.settingsDirty ? "Apply settings" : "Settings OK"
+            accent: appController.settingsDirty ? "#ff9300" : "#00d723"
+            textColor: accent
+            enabled: !appController.busy
+            onClicked: appController.applyLaserSettings()
+        }
+
         FitText {
-            anchors.horizontalCenter: parent.horizontalCenter
+            x: 126
             y: 550
-            width: 720
+            width: 500
             height: 38
-            text: "Total Output Power: " + appController.totalPower + " W        J/cm2"
+            text: "Total Output Power: " + appController.totalPower.toFixed(1) + " W        J/cm2"
             font.pixelSize: 30
             horizontalAlignment: Text.AlignHCenter
         }
@@ -250,6 +274,7 @@ Item {
             y: 60
             text: "Auto"
             active: appController.treatmentMode === "auto"
+            enabled: !appController.busy
             onClicked: appController.setTreatmentMode("auto")
         }
         ModeButton {
@@ -257,6 +282,7 @@ Item {
             y: 60
             text: "Semi\nAuto"
             active: appController.treatmentMode === "semi-auto"
+            enabled: !appController.busy
             onClicked: appController.setTreatmentMode("semi-auto")
         }
         ModeButton {
@@ -264,6 +290,7 @@ Item {
             y: 60
             text: "Manual"
             active: appController.treatmentMode === "manual"
+            enabled: !appController.busy
             onClicked: appController.setTreatmentMode("manual")
         }
     }
@@ -271,22 +298,35 @@ Item {
     FitText {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 1130
-        width: 520
+        width: 620
         height: 42
-        text: "LASER MODULE TEMP: <span style='color:#00d723'>21°C</span>"
+        text: "LASER MODULE TEMP: <span style='color:#00d723'>" + appController.laserTemp + "</span>"
         textFormat: Text.RichText
         font.pixelSize: 30
         horizontalAlignment: Text.AlignHCenter
     }
 
     AppButton {
-        anchors.horizontalCenter: parent.horizontalCenter
+        x: 186
         y: 1180
-        width: 430
+        width: 320
         height: 72
         text: appController.laserReady ? "DISARM" : "ARM"
         accent: "#ffffff"
-        onClicked: appController.setLaserReady(!appController.laserReady)
+        enabled: !appController.busy
+        onClicked: appController.toggleArm()
+    }
+
+    AppButton {
+        x: 574
+        y: 1180
+        width: 320
+        height: 72
+        text: "Emergency Stop"
+        accent: "#dc4f5d"
+        textColor: "#dc4f5d"
+        borderWidth: 4
+        onClicked: appController.emergencyStop()
     }
 
     Panel {
@@ -324,10 +364,59 @@ Item {
             }
         }
 
-        FitText { x: 610; y: 94; width: 228; height: 44; text: "VACUUM LOCK:"; font.pixelSize: 25; horizontalAlignment: Text.AlignRight }
+        FitText { x: 604; y: 44; width: 350; height: 34; text: appController.apiStatus; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter }
+
+        AppButton {
+            x: 610
+            y: 92
+            width: 150
+            height: 58
+            text: "Detect"
+            accent: "#ff9300"
+            textColor: "#ff9300"
+            visible: appController.treatmentMode !== "auto"
+            enabled: !appController.busy
+            onClicked: appController.detectTargets()
+        }
+
+        HoldFireButton {
+            x: 784
+            y: 78
+            width: 160
+            height: 84
+            enabled: !appController.busy && appController.laserReady && (appController.treatmentMode === "auto" || appController.loadedTargetCount > 0)
+            visible: appController.treatmentMode !== "manual"
+            onArmedTriggered: appController.fire()
+        }
+
+        FitText {
+            x: 784
+            y: 168
+            width: 160
+            height: 18
+            text: "Hold 1.2s"
+            font.pixelSize: 12
+            color: "#ff9300"
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        AppButton {
+            x: 784
+            y: 92
+            width: 160
+            height: 58
+            text: "Next"
+            accent: "#ff9300"
+            textColor: "#ff9300"
+            visible: appController.treatmentMode === "manual"
+            enabled: !appController.busy && appController.loadedTargetCount > 0
+            onClicked: appController.nextTarget()
+        }
+
+        FitText { x: 610; y: 178; width: 228; height: 44; text: "VACUUM LOCK:"; font.pixelSize: 25; horizontalAlignment: Text.AlignRight }
         Rectangle {
             x: 846
-            y: 94
+            y: 178
             width: 98
             height: 38
             radius: 19
@@ -343,56 +432,186 @@ Item {
             }
             FitText { x: 7; width: 42; height: parent.height; text: "ON"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter }
             FitText { x: 49; width: 49; height: parent.height; text: "OFF"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter }
-            MouseArea { anchors.fill: parent; onClicked: appController.setVacuumEnabled(!appController.vacuumEnabled) }
+            MouseArea { anchors.fill: parent; enabled: !appController.busy; onClicked: appController.toggleVacuum() }
         }
 
         FitText {
             x: 610
-            y: 172
+            y: 244
             width: 334
             height: 42
-            text: "CONFIDENCE: " + appController.confidence.toFixed(2)
+            text: "CONFIDENCE: " + appController.confidence.toFixed(3)
             font.pixelSize: 25
             horizontalAlignment: Text.AlignHCenter
         }
         Slider {
             x: 664
-            y: 226
+            y: 292
             width: 230
-            from: 0.01
-            to: 1
-            stepSize: 0.01
+            from: 0
+            to: 0.2
+            stepSize: 0.005
             value: appController.confidence
+            live: false
             onMoved: appController.setConfidence(value)
         }
 
-        HoldFireButton {
-            x: 668
-            y: 316
-            width: 220
-            height: 92
-            enabled: !appController.busy && appController.laserReady
-            onArmedTriggered: appController.fire()
+        AppButton {
+            x: 610
+            y: 344
+            width: 158
+            height: 54
+            text: appController.detectionEnabled ? "Detection Off" : "Detection On"
+            accent: appController.detectionEnabled ? "#ff7045" : "#ffffff"
+            enabled: !appController.busy
+            onClicked: appController.toggleDetection()
+        }
+        AppButton {
+            x: 786
+            y: 344
+            width: 158
+            height: 54
+            text: appController.overlayEnabled ? "Overlay Off" : "Overlay On"
+            accent: appController.overlayEnabled ? "#ff7045" : "#ffffff"
+            enabled: !appController.busy
+            onClicked: appController.toggleOverlay()
+        }
+
+        AppButton {
+            x: 610
+            y: 412
+            width: 158
+            height: 54
+            text: "Check States"
+            accent: "#ffffff"
+            enabled: !appController.busy
+            onClicked: appController.checkStates()
+        }
+        AppButton {
+            x: 786
+            y: 412
+            width: 158
+            height: 54
+            text: "Cleanup"
+            accent: "#ffffff"
+            enabled: !appController.busy
+            onClicked: appController.cleanupStates()
         }
 
         FitText {
             x: 610
-            y: 500
+            y: 490
             width: 334
-            height: 40
-            text: "TARGET: <span style='color:#00d723'>" + (appController.target ? "OK" : "NO") + "</span>"
+            height: 34
+            text: "TARGET: <span style='color:" + (appController.target ? "#00d723" : "#dc4f5d") + "'>" + (appController.target ? "OK" : "NO") + "</span>"
             textFormat: Text.RichText
             font.pixelSize: 25
             horizontalAlignment: Text.AlignHCenter
         }
         FitText {
             x: 610
-            y: 540
+            y: 524
             width: 334
-            height: 30
-            text: "TARGETED FOLLICLES: " + appController.targetedFollicles
-            font.pixelSize: 17
+            height: 24
+            text: "APP: " + appController.appState + "    TARGETS: " + appController.loadedTargetCount
+            font.pixelSize: 15
             horizontalAlignment: Text.AlignHCenter
+        }
+        FitText {
+            x: 610
+            y: 548
+            width: 334
+            height: 24
+            text: "TARGET STATE: " + appController.targetState
+            font.pixelSize: 15
+            horizontalAlignment: Text.AlignHCenter
+        }
+        FitText {
+            x: 610
+            y: 570
+            width: 334
+            height: 18
+            text: appController.treatmentLogHead
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
+    // Logs toggle button
+    AppButton {
+        x: 186
+        y: 8
+        width: 200
+        height: 44
+        text: logsVisible ? "Hide Logs" : "Show Logs"
+        accent: logsVisible ? "#ff7045" : "#ffffff"
+        enabled: true
+        onClicked: logsVisible = !logsVisible
+    }
+
+    // Logs panel (top-anchored, expands downward)
+    Rectangle {
+        x: 62
+        y: 56
+        width: 956
+        height: logsVisible ? 350 : 0
+        radius: 12
+        color: "#18000000"
+        border.color: "#ffffff"
+        border.width: 2
+        clip: true
+        visible: height > 0
+        z: 100
+
+        Behavior on height {
+            NumberAnimation { duration: 200 }
+        }
+
+        FitText {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 10
+            width: 420
+            height: 28
+            text: "Treatment Log"
+            font.pixelSize: 20
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        Rectangle {
+            x: 12
+            y: 45
+            width: parent.width - 24
+            height: parent.height - 57
+            color: "#0c0c0c"
+            border.color: "#3a3a3a"
+            border.width: 1
+            radius: 6
+
+            TextEdit {
+                anchors.fill: parent
+                anchors.margins: 6
+                text: appController.treatmentLog
+                color: "#d2dde1"
+                font.family: "Courier"
+                font.pixelSize: 10
+                readOnly: true
+                wrapMode: TextEdit.Wrap
+                selectByMouse: true
+                topPadding: 6
+                bottomPadding: 6
+                leftPadding: 6
+                rightPadding: 6
+            }
+
+            ScrollBar {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 2
+                anchors.topMargin: 2
+                anchors.bottomMargin: 2
+                width: 10
+            }
         }
     }
 }
