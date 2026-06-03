@@ -211,24 +211,66 @@ Mikrokontroller:
 [...]->[OK][timestamp] vagy [...]->[NOK][reason][timestamp]
 ```
 
-Target szekvencia eseten:
+### Target capture es betoltes
 
-```text
-Qt frontend:
-POST /detection/capture
-POST /seq/update_targets
-POST /seq/start
+A Qt frontend a kovetkezo lepesenket hajtja vegre a `detectTargets()` slot meghivasakor:
 
-Backend:
-1. YOLO detektalas a legfrissebb kamerakepen
-2. kepkoordinatak -> galvo koordinatak
-3. TARGET_CLEAR_TARGETS
-4. TARGET_SET_NEW_TARGET minden celpontra
-5. TARGET_SET_MODE manual/auto
-6. TARGET_START vagy TARGET_STEP
-```
+1. Beallitja az alap lezer es pulse szelesseg parametreket a `/treatment/app/settings` endpointon keresztul, ha ezek modositasra kerultek (`_settings_dirty` flag).
+2. Torli az elozo targeteket a `/seq/clear_targets` hivassal.
+3. Torli az elozo pontokat a `/points/clear` hivassal.
+4. Kikapcsolja a target overlayt a `/seq/show_targets?enabled=false` hivassal.
+5. Meghivja a `/detection/capture` endpointot a legfrissebb kamera keppol detektalt pontok lekeresehez.
+6. Ha vannak detektalt pontok:
+   - Meghivja a `/seq/update_targets` endpointot a pontok targetekke konvertalasat es feltoltesere.
+   - Bekapcsolja a target overlayt a `/seq/show_targets?enabled=true` hivassal.
+7. Szekveenciakent meghivja a `/treatment/app/status` endpointot a **teljes backend allapot** lekeresehez, amely tartalmazza:
+   - `laser_armed`: lezer armed allapota (szukseges a FIRE aktivaciohoz)
+   - `loaded_targets`: betoltott targetek szama
+   - `app_state`, `target_state`: az alkalmazas es target szekvencia allapota
+   - Egyeb frissitett parametrek
 
-## 4. Futasmodok
+### FIRE (loadas) / NEXT / STOP kontrollok
+
+A FIRE gomb (HoldFireButton QML komponens) aktivalasat az alabbi feltetelek szuksegessek:
+
+- `!appController.busy`: az alkalmazas nem lehet mas operacioval foglalt.
+- `appController.laserReady`: a lezer ARMED allapotban kell lennie (szarmazik a `laser_armed` backend flagbol a `/treatment/app/status` valaszbol).
+- `appController.treatmentMode !== "manual"`: manual modban NEXT gomb aktiv, nem FIRE.
+- Legalabb egy betoltott target: `appController.loadedTargetCount > 0`.
+
+Az aktivacionak esemenye:
+
+- A gombnak **1200 ms-ig kell nyomva tartani** a hold-to-fire biztonsagi mecha miatt.
+- A QML komponens visual progress bart mutat az aktivacio alatt, es "HOLD" szoveget jelez.
+- Az idozites lejarasa utan `armedTriggered()` signal kerul kibocsatasra, amely `appController.fire()` Qt slotot hivja.
+
+A `fire()` slot:
+
+1. Beallitja az alap parametreket, ha szukseg van ra.
+2. Meghivja a `/treatment/app/fire` endpointot a laser latasara.
+3. A backend valasza frissitetre kerul az AppController allapotaban.
+
+Manual modban a NEXT gomb (`nextTarget()`) a `/treatment/app/next` endpointot hivja, amely a kovetkezo manualis targethez leptet.
+
+A STOP gomb:
+
+1. Meghivja a `/seq/stop` endpointot a target szekvencia leallitasara.
+2. Meghivja a `/app/clear_error` endpointot a hiballapot torlese.
+3. Szekvenzen keresztul frissiti az allapotot.
+
+## 4. Felhasznaloi interfesz
+
+### LaserTreatmentScreen es Treatment Log
+
+A laser treatment kepernyonek szamos informacio megjelenitesi mogohsege van:
+
+- **Felszo szakcio**: backend allapot, laser teljesitmeny (808/980/1064), pulse szelesseg, alkalmazas allapota.
+- **Kamera noglaz**: a `/frame/current` MJPEG kepforras, melyre a backend raj szerhzi a target pontokat, ha az overlay engedelmezett.
+- **Kontroll gombok**: DETECT (target betoltese), FIRE (hold-to-arm, semi-auto modban), NEXT (manual modban).
+- **Treatment Log panel**: egy hidatlan panel, amely az osszes API hivast es backend allapotvaltozast logolja:
+  - Megnyithato a "Show Logs" / "Hide Logs" gombbal a kepernyok bal felsarokeben.
+  - Monospace fonttal jeleniti meg a log szoreit (utolso ~12 sor a kepernyoen, teljes log az expandalhato panelban).
+  - Az osszes backend hivas es hiba automatikusan log-olodik, segitve a debugolast es a felhasznaloi visszajelezes kozodest.
 
 ### Fejlesztoi mod
 

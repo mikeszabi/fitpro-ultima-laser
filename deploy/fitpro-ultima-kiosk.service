@@ -1,0 +1,40 @@
+[Unit]
+Description=FitPro Ultima Laser native Qt kiosk
+After=graphical.target network-online.target hairkiller-backend.service
+Wants=hairkiller-backend.service
+# Wait for X11 to be ready
+After=x11-common.service
+
+[Service]
+Type=simple
+User=jetson
+WorkingDirectory=/opt/fitpro-ultima-laser/qt_app
+
+# Environment variables
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=QT_QPA_PLATFORM=xcb
+Environment=QT_DEBUG_PLUGINS=1
+Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000/api
+Environment=PYTHONUNBUFFERED=1
+
+# Startup script
+ExecStart=/opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+
+# Restart policy
+Restart=always
+RestartSec=3
+StartLimitInterval=60
+StartLimitBurst=5
+
+# Timeout settings
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fitpro-kiosk
+
+[Install]
+WantedBy=graphical.target

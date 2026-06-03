@@ -160,11 +160,15 @@ GET  /stats
 GET  /detection/status
 GET  /frame/current
 GET  /laser/settings
+GET  /laser/temp
 GET  /sensors/values
 GET  /seq/status
+GET  /treatment/app/status
 
+POST /detection/toggle
 POST /detection/conf
 POST /detection/capture
+POST /detection/live_overlay
 POST /points/clear
 POST /seq/update_targets
 POST /seq/clear_targets
@@ -177,12 +181,40 @@ POST /laser/settings
 POST /laser/arm
 POST /laser/disarm
 POST /laser/red_dot
-POST /laser/fire
+POST /treatment/app/settings
+POST /treatment/app/detect
+POST /treatment/app/fire
+POST /treatment/app/next
+POST /treatment/app/emergency_stop
+POST /startup/clean_state
 POST /app/raw_command
 POST /app/clear_error
 ```
 
 Az API hivasokat az `AppController._run()` workerbe csomagolja, igy a QML UI nem fagy be lassu backend vagy hardvervalasz eseten.
+
+### Target capture es betoltes folyamata
+
+A `detectTargets()` slot a kovetkezo lepeseket hajtja vegre:
+
+1. Beallitja az alap lezer es pulse szelesseg parametreket, ha ezek modositasra kerultek.
+2. Torli az elozo target es pont adatokat a backendon.
+3. Meghivja a `/detection/capture` endpointot a kamera kepbol detektalt pontok lekeresehez.
+4. Ha vannak detektalt pontok, meghivja a `/seq/update_targets` endpointot a pontok targetekke konvertalasat es feltoltesere.
+5. Bekapcsolja a target overlay-t a `/seq/show_targets?enabled=true` hivas segitsegevel.
+6. Meghivja a `/treatment/app/status` endpointot a teljes backend allapot lekeresehez, mely tartalmazza a `laser_armed` flaget.
+7. Az allapot frissitesre kerul, amely lehetove teszi a FIRE gombot, ha vannak betoltott targetek es a lezer armed allapotban van.
+
+### FIRE (loadas) es manual/auto modok
+
+A FIRE gomb az alabbi felteteleket varja:
+
+- A lezer ARMED allapotban kell lennie (`laserReady = true`, szarmazik a `laser_armed` backend flagbol).
+- Legalabb egy target kell, hogy be legyen tolve (`loadedTargetCount > 0`).
+- Az alkalmazas nem lehet foglalt mas operacioval (`!appController.busy`).
+- Az eredmenyes FIRE logika betoltes utan `appController.fire()` slotra hivo gombot kell nyomni es **1200 ms-ig tartani** (visual progress bar mutatja az elorehalast).
+
+A `fire()` slot eloszor beallitja az alap parametreket, majd meghivja a `/treatment/app/fire` endpointot.
 
 ## UI fejlesztes QML-ben
 
@@ -191,18 +223,28 @@ Kepernyok:
 - `qt_app/qml/screens/StartScreen.qml`
 - `qt_app/qml/screens/LoginScreen.qml`
 - `qt_app/qml/screens/SettingsScreen.qml`
-- `qt_app/qml/screens/LaserTreatmentScreen.qml`
+- `qt_app/qml/screens/LaserTreatmentScreen.qml` - kezelesi felulet, target detektalas, FIRE kontroll, treatment log panel
 - `qt_app/qml/screens/SystemInfoScreen.qml`
 
 Kozos komponensek:
 
-- `AppButton.qml`
-- `BackButton.qml`
-- `ErrorDialog.qml`
-- `HoldFireButton.qml`
-- `ModeButton.qml`
-- `PowerControl.qml`
-- `StatusPill.qml`
+- `AppButton.qml` - kattinthato gomb
+- `BackButton.qml` - vissza gombbi
+- `ErrorDialog.qml` - globalis hiba megjelentis
+- `HoldFireButton.qml` - hold-to-activate FIRE gomb (1200ms)
+- `ModeButton.qml` - treatment mode valaszto (auto/semi-auto/manual)
+- `PowerControl.qml` - laser teljesitmeny slider
+- `StatusPill.qml` - allapot info lablak
+
+### LaserTreatmentScreen es Treatment Log panel
+
+A treatment kepernyonek van egy hidatlan Treatment Log panele:
+
+- A "Show Logs" / "Hide Logs" gomb a kepernyok bal felsarokeben talalhato.
+- A panel az elozo logbejegyzeseket jelenigenti meg monospace fontban.
+- A log sorai autora frissulnek az API hivasok es backend allapotvaltozasok alapjan.
+- Az osszesorites (utolso ~12 sor) a kepernyofelulet jobb oldalan jelenik meg (minimalist view).
+- A teljes log az expandalhato panelban tekintheto meg alacsonyabb szamitasi teher mellett.
 
 Uj kepernyo hozzaadasa:
 
@@ -314,3 +356,7 @@ Jelenleg nincs automatizalt Qt tesztkeszlet. Javasolt minimalis manual smoke:
 - Ha a kiosk service nem indul, ellenorizd, hogy a service-ben szereplo `/opt/fitpro-ultima-laser/qt_app` utvonal letezik-e.
 - Ha nincs kepfrissites, ellenorizd a backend `/frame/current` endpointjat.
 - Ha az erintes pontatlan, ellenorizd az X11 touchscreen kalibraciot.
+- Ha a FIRE gomb nem aktivalhato a detektalas utan, ellenorizd a Treatment Log-ban, hogy az ARM gombot (vagy automatikus lezerfeltoltest) vegre kellett-e hajtani. A backend allapotnak `laser_armed: true` flaget kellene tartalmaznia.
+- A FIRE gombot **1200 ms-ig kell nyomva tartani** - nem elegendo a gyors kattintas. A gomb "HOLD" szoveget es progress bart mutat az aktivacio alatt.
+- Ha a targeteket nem tolodnek be, ellenorizd a log panelban az "Targets loaded" szovegezest es az "Update targets" hivas eredmenyet.
+- A Treatment Log panel a kepernyok felsarokeben talalhato "Show Logs" gombbal nyithato meg - hasznald ezt a debugolashot!
