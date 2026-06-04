@@ -32,7 +32,7 @@ A native PySide6/QML kiosk application for the Ultima Laser treatment system, de
 │   │       └── SystemInfoScreen.qml
 │   └── systemd/
 │       └── fitpro-ultima-kiosk.service
-└── deploy/                          # Backend deployment helpers
+└── deploy/                          # Production systemd service files
 ```
 
 ## Architecture
@@ -45,8 +45,8 @@ Full system architecture documentation is available in [ARCHITECTURE.md](./ARCHI
 
 ```bash
 cd qt_app
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv qt_venv
+source qt_venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -54,7 +54,7 @@ pip install -r requirements.txt
 
 ```bash
 cd qt_app
-source .venv/bin/activate
+source qt_venv/bin/activate
 python main.py --windowed
 ```
 
@@ -77,7 +77,7 @@ This script:
 ```bash
 export FITPRO_API_BASE_URL="http://192.168.1.100:8000"
 cd qt_app
-source .venv/bin/activate
+source qt_venv/bin/activate
 python main.py --windowed
 ```
 
@@ -90,8 +90,6 @@ cd qt_app
 ```
 
 ## Backend Setup
-
-```
 
 ### Check Backend Status and Logs
 
@@ -116,20 +114,71 @@ This script:
 
 **Note:** You may need to log out and log back in for group changes to take effect.
 
-## Systemd Service for Qt App (Optional)
+## Production Install and Updates
 
-For production deployment, you can run the Qt app as a systemd service:
+The production service expects the Qt app at:
+
+```text
+/opt/fitpro-ultima-laser/qt_app
+```
+
+The virtual environment must be named `qt_venv`:
+
+```text
+/opt/fitpro-ultima-laser/qt_app/qt_venv
+```
+
+### First Install on the Jetson
+
+Run these commands from this repository checkout:
 
 ```bash
-sudo cp qt_app/systemd/fitpro-ultima-kiosk.service /etc/systemd/system/
+sudo mkdir -p /opt/fitpro-ultima-laser
+sudo rsync -a --delete --exclude 'qt_venv' --exclude '__pycache__' qt_app/ /opt/fitpro-ultima-laser/qt_app/
+sudo cp qt_app/run-kiosk.sh /opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+sudo chmod +x /opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+
+cd /opt/fitpro-ultima-laser/qt_app
+python3 -m venv qt_venv
+source qt_venv/bin/activate
+pip install -r requirements.txt
+
+sudo cp /home/jetson/Projects/fitpro-ultima-laser/deploy/fitpro-ultima-kiosk.service /etc/systemd/system/fitpro-ultima-kiosk.service
 sudo systemctl daemon-reload
 sudo systemctl enable fitpro-ultima-kiosk
 sudo systemctl start fitpro-ultima-kiosk
 ```
 
-View logs:
+### When Code Is Updated
+
+After pulling or editing code in `/home/jetson/Projects/fitpro-ultima-laser`, copy the updated Qt app and startup script into `/opt`, refresh dependencies if needed, reload systemd, and restart the service:
 
 ```bash
+cd /home/jetson/Projects/fitpro-ultima-laser
+
+# 1. Copy updated Qt application code to the production location.
+sudo rsync -a --delete --exclude 'qt_venv' --exclude '__pycache__' qt_app/ /opt/fitpro-ultima-laser/qt_app/
+
+# 2. Copy the startup script explicitly and keep it executable.
+sudo cp qt_app/run-kiosk.sh /opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+sudo chmod +x /opt/fitpro-ultima-laser/qt_app/run-kiosk.sh
+
+# 3. If requirements.txt changed, update the production qt_venv.
+cd /opt/fitpro-ultima-laser/qt_app
+source qt_venv/bin/activate
+pip install -r requirements.txt
+
+# 4. Copy the latest service file, reload systemd, and restart the kiosk.
+cd /home/jetson/Projects/fitpro-ultima-laser
+sudo cp deploy/fitpro-ultima-kiosk.service /etc/systemd/system/fitpro-ultima-kiosk.service
+sudo systemctl daemon-reload
+sudo systemctl restart fitpro-ultima-kiosk
+```
+
+Check service status and follow logs:
+
+```bash
+sudo systemctl status fitpro-ultima-kiosk
 sudo journalctl -u fitpro-ultima-kiosk -f
 ```
 

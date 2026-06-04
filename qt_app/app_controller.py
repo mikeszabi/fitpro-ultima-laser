@@ -344,7 +344,8 @@ class AppController(QObject):
         api_mode = self._mode_to_api(mode)
 
         def task() -> Any:
-            return self._api.set_treatment_app_mode(api_mode)
+            self._api.set_treatment_app_mode(api_mode)
+            return self._api.treatment_app_status()
 
         self._run(
             f"Mode {mode.upper()}",
@@ -354,7 +355,7 @@ class AppController(QObject):
 
     @Slot(float)
     def setConfidence(self, confidence: float) -> None:
-        confidence = max(0.0, min(0.2, float(confidence)))
+        confidence = max(0.01, min(1.0, float(confidence)))
 
         def task() -> float:
             self._api.set_detection_confidence(confidence)
@@ -377,9 +378,9 @@ class AppController(QObject):
         def task() -> Any:
             self._api.startup_clean_state()
             self._api.set_treatment_app_mode("semi_auto")
-            return {"mode": "semi_auto", "clean_state": True}
+            return self._api.treatment_app_status()
 
-        self._run("Treatment init", task, self._apply_cleanup_state)
+        self._run("Treatment init", task, self._apply_treatment_status)
 
     @Slot()
     def startTreatmentCameraStream(self) -> None:
@@ -417,34 +418,8 @@ class AppController(QObject):
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            # Clear previous targets and points
-            self._api.clear_targets()
-            self._api.clear_points()
-            self._api.show_targets(False)
-            
-            # Capture detections from camera
-            capture_result = self._api.capture_detections()
-            captured_count = capture_result.get("captured", 0) if capture_result else 0
-            
-            # Upload targets to backend if any were captured
-            targets_result = None
-            if captured_count > 0:
-                targets_result = self._api.update_targets()
-                # Show targets overlay
-                self._api.show_targets(True)
-            
-            # Always get full status to ensure laser_armed and other state is updated
-            status = self._api.treatment_app_status()
-            
-            # Merge targets info with status
-            if targets_result:
-                status.update(targets_result)
-            
-            # Add capture info to log
-            if captured_count == 0:
-                status["detected_count"] = 0
-            
-            return status
+            data = self._api.treatment_app_detect()
+            return self._status_with_result(data)
 
         self._run("Detect targets", task, self._apply_treatment_status)
 
@@ -453,7 +428,8 @@ class AppController(QObject):
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            return self._api.treatment_app_fire()
+            data = self._api.treatment_app_fire()
+            return self._status_with_result(data)
 
         self._run("Fire", task, self._apply_treatment_status)
 
@@ -462,7 +438,8 @@ class AppController(QObject):
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            return self._api.treatment_app_next()
+            data = self._api.treatment_app_next()
+            return self._status_with_result(data)
 
         self._run("Next target", task, self._apply_treatment_status)
 
@@ -478,14 +455,19 @@ class AppController(QObject):
 
     @Slot()
     def emergencyStop(self) -> None:
-        self._run("Emergency stop", self._api.treatment_app_emergency_stop, self._apply_treatment_status)
+        def task() -> Any:
+            data = self._api.treatment_app_emergency_stop()
+            return self._status_with_result(data)
+
+        self._run("Emergency stop", task, self._apply_treatment_status)
 
     @Slot()
     def cleanupStates(self) -> None:
         def task() -> Any:
-            return self._api.startup_clean_state()
+            self._api.startup_clean_state()
+            return self._api.treatment_app_status()
 
-        self._run("Cleanup states", task, self._apply_cleanup_state)
+        self._run("Cleanup states", task, self._apply_treatment_status)
 
     @Slot()
     def checkStates(self) -> None:
@@ -555,7 +537,13 @@ class AppController(QObject):
             self._pulse_width,
         )
         self._settings_dirty = False
-        return result
+        return self._status_with_result(result)
+
+    def _status_with_result(self, data: Any) -> dict[str, Any]:
+        status = self._api.treatment_app_status()
+        if isinstance(status, dict) and isinstance(data, dict):
+            status.update(data)
+        return status if isinstance(status, dict) else {}
 
     def _run(
         self,
@@ -734,7 +722,7 @@ class AppController(QObject):
         self._loaded_target_count = target_count
 
         if "detection_conf" in data:
-            self._confidence = max(0.0, min(0.2, float(data.get("detection_conf") or self._confidence)))
+            self._confidence = max(0.01, min(1.0, float(data.get("detection_conf") or self._confidence)))
 
         power = data.get("laser_power", {})
         if isinstance(power, dict):

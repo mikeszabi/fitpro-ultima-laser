@@ -384,8 +384,8 @@ Item {
             y: 78
             width: 160
             height: 84
-            enabled: !appController.busy && appController.laserReady && (appController.treatmentMode === "auto" || appController.loadedTargetCount > 0)
-            visible: appController.treatmentMode !== "manual"
+            enabled: !appController.busy && appController.loadedTargetCount > 0
+            visible: appController.treatmentMode === "semi-auto"
             onArmedTriggered: appController.fire()
         }
 
@@ -397,6 +397,7 @@ Item {
             text: "Hold 1.2s"
             font.pixelSize: 12
             color: "#ff9300"
+            visible: appController.treatmentMode === "semi-auto"
             horizontalAlignment: Text.AlignHCenter
         }
 
@@ -449,7 +450,7 @@ Item {
             y: 292
             width: 230
             from: 0
-            to: 0.2
+            to: 1
             stepSize: 0.005
             value: appController.confidence
             live: false
