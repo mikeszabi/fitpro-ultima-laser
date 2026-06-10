@@ -17,6 +17,8 @@ Item {
     Image {
         anchors.fill: parent
         source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        sourceSize.width: 1080
+        sourceSize.height: 1920
         fillMode: Image.PreserveAspectCrop
     }
 
@@ -26,14 +28,14 @@ Item {
     }
 
     Timer {
-        interval: 2500
+        interval: 30000
         running: true
         repeat: true
         onTriggered: appController.syncBackend()
     }
 
     Timer {
-        interval: 750
+        interval: 250
         running: true
         repeat: true
         onTriggered: appController.refreshCameraFrame()
@@ -274,6 +276,7 @@ Item {
             y: 60
             text: "Auto"
             active: appController.treatmentMode === "auto"
+            readyHighlight: appController.treatmentModeReady
             enabled: !appController.busy
             onClicked: appController.setTreatmentMode("auto")
         }
@@ -282,6 +285,7 @@ Item {
             y: 60
             text: "Semi\nAuto"
             active: appController.treatmentMode === "semi-auto"
+            readyHighlight: appController.treatmentModeReady
             enabled: !appController.busy
             onClicked: appController.setTreatmentMode("semi-auto")
         }
@@ -290,6 +294,7 @@ Item {
             y: 60
             text: "Manual"
             active: appController.treatmentMode === "manual"
+            readyHighlight: appController.treatmentModeReady
             enabled: !appController.busy
             onClicked: appController.setTreatmentMode("manual")
         }
@@ -349,6 +354,8 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 7
                 source: appController.cameraFrameUrl !== "" ? appController.cameraFrameUrl : "../../assets/images/xd-new/scan-target.png"
+                sourceSize.width: 572
+                sourceSize.height: 572
                 asynchronous: true
                 retainWhileLoading: true
                 cache: false
@@ -364,8 +371,6 @@ Item {
             }
         }
 
-        FitText { x: 604; y: 44; width: 350; height: 34; text: appController.apiStatus; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter }
-
         AppButton {
             x: 610
             y: 92
@@ -379,26 +384,19 @@ Item {
             onClicked: appController.detectTargets()
         }
 
-        HoldFireButton {
+        AppButton {
             x: 784
-            y: 78
+            y: 92
             width: 160
-            height: 84
-            enabled: !appController.busy && appController.loadedTargetCount > 0
+            height: 58
+            text: "FIRE"
+            accent: appController.fireReady ? "#a8ffb7" : "#ff9300"
+            textColor: "#dc4f5d"
+            disabledTextColor: "#dc4f5d"
+            borderWidth: appController.fireReady ? 5 : 3
+            enabled: !appController.busy && appController.fireReady
             visible: appController.treatmentMode === "semi-auto"
-            onArmedTriggered: appController.fire()
-        }
-
-        FitText {
-            x: 784
-            y: 168
-            width: 160
-            height: 18
-            text: "Hold 1.2s"
-            font.pixelSize: 12
-            color: "#ff9300"
-            visible: appController.treatmentMode === "semi-auto"
-            horizontalAlignment: Text.AlignHCenter
+            onClicked: appController.fire()
         }
 
         AppButton {

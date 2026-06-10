@@ -6,6 +6,7 @@ Button {
     property color accent: "#ffffff"
     property color danger: "#dc4f5d"
     property color textColor: "#ffffff"
+    property color disabledTextColor: "#7d8d8d"
     property int borderWidth: 3
 
     implicitHeight: 58
@@ -15,7 +16,7 @@ Button {
 
     contentItem: Text {
         text: control.text
-        color: control.enabled ? control.textColor : "#7d8d8d"
+        color: control.enabled ? control.textColor : control.disabledTextColor
         font: control.font
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

@@ -23,17 +23,6 @@ ApplicationWindow {
         source: "../assets/fonts/HurmeGeometricSans2-Regular.otf"
     }
 
-    Image {
-        anchors.fill: parent
-        source: "../assets/images/xd-new/abstract-wave-bg.jpg"
-        fillMode: Image.PreserveAspectCrop
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        color: "#15000000"
-    }
-
     Item {
         id: appSurface
         width: designWidth
@@ -52,6 +41,7 @@ ApplicationWindow {
                 case "settings": return settingsScreen
                 case "laser-treatment": return laserTreatmentScreen
                 case "system-info": return systemInfoScreen
+                case "hw-sw-test": return hwSwTestScreen
                 default: return startScreen
                 }
             }
@@ -71,4 +61,5 @@ ApplicationWindow {
     Component { id: settingsScreen; SettingsScreen {} }
     Component { id: laserTreatmentScreen; LaserTreatmentScreen {} }
     Component { id: systemInfoScreen; SystemInfoScreen {} }
+    Component { id: hwSwTestScreen; HwSwTestScreen {} }
 }

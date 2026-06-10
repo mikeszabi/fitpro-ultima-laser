@@ -8,6 +8,8 @@ Item {
     Image {
         anchors.fill: parent
         source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        sourceSize.width: 1080
+        sourceSize.height: 1920
         fillMode: Image.PreserveAspectCrop
     }
 

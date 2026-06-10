@@ -4,6 +4,7 @@ import QtQuick.Controls
 Button {
     id: control
     property bool active: false
+    property bool readyHighlight: false
 
     width: 112
     height: 112
@@ -22,9 +23,9 @@ Button {
 
     background: Rectangle {
         radius: width / 2
-        color: control.active ? "#8fb56d5f" : "#09000000"
+        color: control.active ? (control.readyHighlight ? "#5443d76a" : "#8fb56d5f") : "#09000000"
         border.width: control.active ? 7 : 3
-        border.color: "#ffffff"
+        border.color: control.active && control.readyHighlight ? "#a8ffb7" : "#ffffff"
 
         Rectangle {
             anchors.fill: parent
@@ -33,7 +34,7 @@ Button {
             visible: control.active
             color: "transparent"
             border.width: 2
-            border.color: "#ffc1b5"
+            border.color: control.readyHighlight ? "#d7ffdd" : "#ffc1b5"
         }
     }
 }

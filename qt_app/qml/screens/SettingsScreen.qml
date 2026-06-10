@@ -13,6 +13,8 @@ Item {
     Image {
         anchors.fill: parent
         source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        sourceSize.width: 1080
+        sourceSize.height: 1920
         fillMode: Image.PreserveAspectCrop
     }
 
@@ -61,6 +63,8 @@ Item {
             width: 260
             height: 132
             source: "../../assets/images/xd-new/calibration-device.png"
+            sourceSize.width: 260
+            sourceSize.height: 132
             fillMode: Image.PreserveAspectFit
         }
 

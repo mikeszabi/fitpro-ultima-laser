@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import threading
 import time
@@ -43,6 +44,7 @@ class AppController(QObject):
     targetChanged = Signal()
     cameraFrameUrlChanged = Signal()
     errorChanged = Signal()
+    diagnosticsChanged = Signal()
     _cameraFrameReady = Signal(str, object)
     _cameraFrameFailed = Signal(str, object)
     _taskFinished = Signal(str, object, object, bool, object)
@@ -57,6 +59,7 @@ class AppController(QObject):
 
         self._screen = "start"
         self._api_status = "Backend: checking"
+        self._backend_ok = False
         self._busy = False
         self._laser_ready = False
         self._p808 = 20
@@ -84,9 +87,20 @@ class AppController(QObject):
         self._camera_frame_dir.mkdir(parents=True, exist_ok=True)
         self._camera_frame_slot = 0
         self._camera_refresh_in_flight = False
+        self._camera_last_refresh_at = 0.0
+        self._camera_min_refresh_interval = 0.25
+        self._camera_last_error = ""
         self._camera_frame_url = ""
+        self._backend_camera_error = ""
+        self._backend_sync_error = ""
+        self._sync_backend_in_flight = False
         self._treatment_stream_stop: threading.Event | None = None
         self._treatment_stream_thread: threading.Thread | None = None
+        self._diagnostic_checks: list[dict[str, str]] = []
+        self._diagnostic_summary = "Not run yet"
+        self._diagnostic_raw_output = ""
+        self._diagnostic_last_run = ""
+        self._backend_restart_output = "Backend restart has not been run."
         self._error_title = ""
         self._error_message = ""
 
@@ -216,6 +230,21 @@ class AppController(QObject):
     def treatmentLogHead(self) -> str:
         return self._treatment_log.splitlines()[0] if self._treatment_log else ""
 
+    @Property(bool, notify=targetChanged)
+    def treatmentModeReady(self) -> bool:
+        return self._backend_ok and self._is_ok_state(self._app_state) and self._is_ok_state(self._target_state)
+
+    @Property(bool, notify=targetChanged)
+    def fireReady(self) -> bool:
+        return (
+            self.treatmentModeReady
+            and self._laser_ready
+            and self._vacuum_enabled
+            and self._target_error_clear
+            and not self._settings_dirty
+            and self._loaded_target_count > 0
+        )
+
     @Property(str, notify=cameraFrameUrlChanged)
     def cameraFrameUrl(self) -> str:
         return self._camera_frame_url
@@ -231,6 +260,26 @@ class AppController(QObject):
     @Property(str, notify=errorChanged)
     def errorMessage(self) -> str:
         return self._error_message
+
+    @Property("QVariantList", notify=diagnosticsChanged)
+    def diagnosticChecks(self) -> list[dict[str, str]]:
+        return self._diagnostic_checks
+
+    @Property(str, notify=diagnosticsChanged)
+    def diagnosticSummary(self) -> str:
+        return self._diagnostic_summary
+
+    @Property(str, notify=diagnosticsChanged)
+    def diagnosticRawOutput(self) -> str:
+        return self._diagnostic_raw_output
+
+    @Property(str, notify=diagnosticsChanged)
+    def diagnosticLastRun(self) -> str:
+        return self._diagnostic_last_run
+
+    @Property(str, notify=diagnosticsChanged)
+    def backendRestartOutput(self) -> str:
+        return self._backend_restart_output
 
     @Slot(str)
     def navigate(self, screen: str) -> None:
@@ -251,12 +300,18 @@ class AppController(QObject):
 
     @Slot()
     def refreshCameraFrame(self) -> None:
+        if self._screen != "laser-treatment":
+            return
         if self._busy:
             return
         if self._camera_refresh_in_flight:
             return
+        now = time.monotonic()
+        if now - self._camera_last_refresh_at < self._camera_min_refresh_interval:
+            return
 
         self._camera_refresh_in_flight = True
+        self._camera_last_refresh_at = now
 
         def task() -> str:
             timestamp = int(time.time() * 1000)
@@ -286,6 +341,10 @@ class AppController(QObject):
 
     @Slot()
     def syncBackend(self) -> None:
+        if self._sync_backend_in_flight:
+            return
+        self._sync_backend_in_flight = True
+
         def task() -> dict[str, Any]:
             health = self._api.health()
             return {
@@ -293,6 +352,48 @@ class AppController(QObject):
             }
 
         self._run("Backend sync", task, self._apply_backend_state, busy=False)
+
+    @Slot(str)
+    def restartBackend(self, sudo_password: str) -> None:
+        if not sudo_password:
+            self._backend_restart_output = "Enter the sudo password before restarting."
+            self.diagnosticsChanged.emit()
+            return
+
+        def task() -> str:
+            completed = subprocess.run(
+                ["sudo", "-S", "-k", "-p", "", "systemctl", "restart", "hairkiller-backend.service"],
+                input=f"{sudo_password}\n",
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=45.0,
+            )
+            output = "\n".join(
+                part.strip()
+                for part in (completed.stdout, completed.stderr)
+                if part and part.strip()
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(output or f"systemctl exited with {completed.returncode}")
+            self._api.wait_until_ready(timeout=35.0)
+            return output or "Backend restarted and is reachable."
+
+        self._run("Backend restart", task, self._apply_backend_restart_output)
+
+    @Slot(bool)
+    def runFullBackendCheck(self, skip_model_load: bool) -> None:
+        self._diagnostic_checks = []
+        self._diagnostic_summary = "Running..."
+        self._diagnostic_raw_output = ""
+        self._diagnostic_last_run = ""
+        self.diagnosticsChanged.emit()
+
+        self._run(
+            "Full backend check",
+            lambda: self._run_full_backend_check_task(skip_model_load),
+            self._apply_full_backend_check,
+        )
 
     @Slot(bool)
     def setLaserReady(self, enabled: bool) -> None:
@@ -373,8 +474,6 @@ class AppController(QObject):
 
     @Slot()
     def initializeTreatmentPage(self) -> None:
-        self.startTreatmentCameraStream()
-
         def task() -> Any:
             self._api.startup_clean_state()
             self._api.set_treatment_app_mode("semi_auto")
@@ -384,27 +483,7 @@ class AppController(QObject):
 
     @Slot()
     def startTreatmentCameraStream(self) -> None:
-        if self._treatment_stream_thread is not None and self._treatment_stream_thread.is_alive():
-            return
-
-        stop_event = threading.Event()
-        self._treatment_stream_stop = stop_event
-
-        def stream_task() -> None:
-            while not stop_event.is_set():
-                try:
-                    self._api.keep_current_frame_stream_alive(stop_event)
-                except Exception as exc:
-                    if not stop_event.is_set():
-                        self._streamLog.emit(f"Camera stream: {exc}")
-                        time.sleep(2.5)
-
-        self._treatment_stream_thread = threading.Thread(
-            target=stream_task,
-            name="fitpro-treatment-camera-stream",
-            daemon=True,
-        )
-        self._treatment_stream_thread.start()
+        self.stopTreatmentCameraStream()
 
     @Slot()
     def stopTreatmentCameraStream(self) -> None:
@@ -539,6 +618,10 @@ class AppController(QObject):
         self._settings_dirty = False
         return self._status_with_result(result)
 
+    def _run_full_backend_check_task(self, skip_model_load: bool) -> Any:
+        self._api.wait_until_ready(timeout=20.0)
+        return self._api.full_app_check(skip_model_load)
+
     def _status_with_result(self, data: Any) -> dict[str, Any]:
         status = self._api.treatment_app_status()
         if isinstance(status, dict) and isinstance(data, dict):
@@ -554,7 +637,8 @@ class AppController(QObject):
     ) -> None:
         if busy:
             self._set_busy(True)
-        self._set_status(f"{label}...")
+        if label != "Backend sync":
+            self._set_status(f"{label}...")
         worker = ApiWorker(task)
         self._workers.append(worker)
         worker.signals.finished.connect(
@@ -568,6 +652,7 @@ class AppController(QObject):
     @Slot(str, object)
     def _handle_camera_frame_ready(self, url: str, worker: object) -> None:
         self._camera_refresh_in_flight = False
+        self._camera_last_error = ""
         self._release_worker(worker)
         self._camera_frame_url = url
         self.cameraFrameUrlChanged.emit()
@@ -576,7 +661,9 @@ class AppController(QObject):
     def _handle_camera_frame_failed(self, message: str, worker: object) -> None:
         self._camera_refresh_in_flight = False
         self._release_worker(worker)
-        self._set_status(f"Camera frame: {message}")
+        if message != self._camera_last_error:
+            self._camera_last_error = message
+            self._set_status(f"Camera frame: {message}")
 
     @Slot(str, object, object, bool, object)
     def _handle_task_finished(
@@ -588,16 +675,47 @@ class AppController(QObject):
         worker: object,
     ) -> None:
         on_success(result)
-        self._set_status(f"{label}: OK")
-        self._append_log(f"{label}: OK")
+        if label == "Backend sync":
+            self._sync_backend_in_flight = False
+            self._backend_sync_error = ""
+            backend_changed = not self._backend_ok
+            self._backend_ok = True
+            if backend_changed:
+                self.targetChanged.emit()
+        if label != "Backend sync":
+            self._set_status(f"{label}: OK")
+        if label != "Backend sync":
+            self._append_log(f"{label}: OK")
         self._release_worker(worker)
         if busy:
             self._set_busy(False)
 
     @Slot(str, str, bool, object)
     def _handle_task_failed(self, label: str, message: str, busy: bool, worker: object) -> None:
+        if label == "Backend sync":
+            self._sync_backend_in_flight = False
+            if message != self._backend_sync_error:
+                self._backend_sync_error = message
+                self._set_status(message)
+            backend_changed = self._backend_ok
+            self._backend_ok = False
+            if backend_changed:
+                self.targetChanged.emit()
+            self._release_worker(worker)
+            if busy:
+                self._set_busy(False)
+            return
         self._set_status(message)
-        self._append_log(f"{label}: {message}")
+        if label != "Backend sync":
+            self._append_log(f"{label}: {message}")
+        if label == "Backend restart":
+            self._backend_restart_output = message
+            self.diagnosticsChanged.emit()
+        elif label == "Full backend check":
+            self._diagnostic_summary = f"Overall FAIL | {message}"
+            self._diagnostic_raw_output = message
+            self._diagnostic_last_run = time.strftime("%H:%M:%S")
+            self.diagnosticsChanged.emit()
         self._error_title = label
         self._error_message = message
         self.errorChanged.emit()
@@ -622,6 +740,8 @@ class AppController(QObject):
         )
 
     def _set_status(self, status: str) -> None:
+        if self._api_status == status:
+            return
         self._api_status = status
         self.apiStatusChanged.emit()
 
@@ -634,14 +754,11 @@ class AppController(QObject):
         if isinstance(health, dict):
             camera_ready = bool(health.get("camera_ready", False))
             camera_error = health.get("camera_error")
-            if not camera_ready and camera_error:
+            if camera_ready:
+                self._backend_camera_error = ""
+            elif camera_error and camera_error != self._backend_camera_error:
+                self._backend_camera_error = str(camera_error)
                 self._append_log(f"Camera: {camera_error}")
-        self.laserStateChanged.emit()
-        self.vacuumChanged.emit()
-        self.powerChanged.emit()
-        self.pulseWidthChanged.emit()
-        self.redDotChanged.emit()
-        self.targetChanged.emit()
 
     def _apply_laser_ready(self, enabled: bool) -> None:
         self._laser_ready = enabled
@@ -669,6 +786,47 @@ class AppController(QObject):
     def _apply_laser_temp(self, value: str) -> None:
         self._laser_temp = value
         self.targetChanged.emit()
+
+    def _apply_backend_restart_output(self, output: str) -> None:
+        self._backend_restart_output = output
+        self.diagnosticsChanged.emit()
+
+    def _apply_full_backend_check(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            data = {}
+
+        checks = data.get("checks", [])
+        normalized_checks: list[dict[str, str]] = []
+        if isinstance(checks, list):
+            for check in checks:
+                if not isinstance(check, dict):
+                    continue
+                normalized_checks.append(
+                    {
+                        "status": str(check.get("status", "-")),
+                        "name": str(check.get("name", "-")),
+                        "message": str(check.get("message", "")),
+                    }
+                )
+
+        ok_count = sum(1 for check in normalized_checks if check["status"] == "OK")
+        fail_count = sum(1 for check in normalized_checks if check["status"] == "FAIL")
+        warn_count = sum(1 for check in normalized_checks if check["status"] == "WARN")
+        duration_ms = round(float(data.get("duration_ms", 0) or 0))
+        overall = "OK" if data.get("ok") else "FAIL"
+
+        self._diagnostic_checks = normalized_checks
+        self._diagnostic_summary = (
+            f"Overall {overall} | OK {ok_count} | FAIL {fail_count} | "
+            f"WARN {warn_count} | {duration_ms} ms"
+        )
+        self._diagnostic_raw_output = "\n".join(
+            part
+            for part in (str(data.get("stdout", "") or ""), str(data.get("stderr", "") or ""))
+            if part
+        )
+        self._diagnostic_last_run = time.strftime("%H:%M:%S")
+        self.diagnosticsChanged.emit()
 
     def _apply_cleanup_state(self, data: Any) -> None:
         if isinstance(data, dict) and data.get("mode"):
@@ -783,6 +941,10 @@ class AppController(QObject):
     @staticmethod
     def _mode_to_api(mode: str) -> str:
         return "semi_auto" if mode == "semi-auto" else mode
+
+    @staticmethod
+    def _is_ok_state(value: str) -> bool:
+        return str(value).strip().upper() == "OK"
 
     @staticmethod
     def _percent_to_watts(percent: int | float) -> float:

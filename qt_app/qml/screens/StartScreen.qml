@@ -7,6 +7,8 @@ Item {
     Image {
         anchors.fill: parent
         source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        sourceSize.width: 1080
+        sourceSize.height: 1920
         fillMode: Image.PreserveAspectCrop
     }
 
@@ -21,6 +23,8 @@ Item {
         width: 673
         height: 787
         source: "../../assets/images/xd-new/ultima-u-mark.png"
+        sourceSize.width: 673
+        sourceSize.height: 787
         fillMode: Image.PreserveAspectFit
     }
 

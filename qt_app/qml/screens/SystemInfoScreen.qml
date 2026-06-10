@@ -4,6 +4,19 @@ import "../components"
 Item {
     anchors.fill: parent
 
+    Image {
+        anchors.fill: parent
+        source: "../../assets/images/xd-new/abstract-wave-bg.jpg"
+        sourceSize.width: 1080
+        sourceSize.height: 1920
+        fillMode: Image.PreserveAspectCrop
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#26000000"
+    }
+
     BackButton {
         x: 32
         y: 30
@@ -104,5 +117,15 @@ Item {
         text: "GUI version check"
         accent: "#6c96ff"
         onClicked: appController.syncBackend()
+    }
+
+    AppButton {
+        x: 604
+        y: 936
+        width: 300
+        height: 60
+        text: "HW/SW test"
+        accent: "#ff7045"
+        onClicked: appController.navigate("hw-sw-test")
     }
 }

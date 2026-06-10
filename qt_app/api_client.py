@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -244,6 +245,20 @@ class ApiClient:
     def health(self) -> Any:
         return self.get("/health")
 
+    def wait_until_ready(self, timeout: float = 30.0, interval: float = 0.75) -> Any:
+        deadline = time.monotonic() + timeout
+        last_error: ApiError | None = None
+
+        while time.monotonic() < deadline:
+            try:
+                return self.health()
+            except ApiError as exc:
+                last_error = exc
+                time.sleep(interval)
+
+        detail = f": {last_error}" if last_error is not None else ""
+        raise ApiError(f"Backend is not reachable at {self.base_url}{detail}")
+
     def stats(self) -> Any:
         return self.get("/stats")
 
@@ -261,6 +276,13 @@ class ApiClient:
 
     def treatment_app_status(self) -> Any:
         return self.get("/treatment/app/status", timeout=30.0)
+
+    def full_app_check(self, skip_model_load: bool = False) -> Any:
+        return self.get(
+            "/diagnostics/full_app_check",
+            {"skip_model_load": "true" if skip_model_load else "false"},
+            timeout=max(self.slow_timeout, 120.0),
+        )
 
     def set_treatment_app_mode(self, mode: str) -> Any:
         return self.post("/treatment/app/mode", {"mode": mode}, timeout=15.0)
