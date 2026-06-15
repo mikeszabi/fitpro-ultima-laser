@@ -54,6 +54,15 @@ xinput list
 
 Ha az érintés látszik input eventként, de a pozíció elcsúszik, X11 alatt `xinput_calibrator` vagy `xinput set-prop ... "Coordinate Transformation Matrix" ...` szükséges.
 
+Ha egy érintés/gombnyomás csak a következő billentyűzet esemény után hajtódik
+végre, maradjon bekapcsolva a `QT_XCB_NO_XI2=1` környezeti változó. A launcher
+scriptek és service fájlok ezt alapból beállítják, hogy Qt X11 alatt a
+stabilabb legacy mouse event útvonalat használja az XInput2 touch útvonal
+helyett.
+Az app alapból egy kis Qt input event pumpot is futtat
+(`FITPRO_QT_INPUT_PUMP_MS=50`), hogy a függőben lévő X11 input események
+rendszeresen feldolgozásra kerüljenek. Teszteléshez `0` értékkel kapcsolható ki.
+
 Touch UX állapot:
 
 - Qt mouse/touch esemény szintézis engedélyezve.

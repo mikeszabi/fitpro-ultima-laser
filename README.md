@@ -196,6 +196,15 @@ sudo evtest
 xinput list
 ```
 
+If a touch/button press appears to be held until another input event arrives
+(for example Alt-Tab or any keyboard key), keep `QT_XCB_NO_XI2=1` enabled in
+the kiosk service/launcher. The shipped launch scripts and service files set
+this by default so Qt uses the legacy X11 mouse event path instead of the
+flaky XInput2 touch path on affected Jetson/X11 touchscreen stacks.
+The app also enables a small Qt input event pump by default
+(`FITPRO_QT_INPUT_PUMP_MS=50`) so pending X11 input is drained regularly. Set
+that value to `0` only if you need to disable the workaround for testing.
+
 ### Touchscreen Coordinate Calibration
 
 If touch input is detected but coordinates are offset, you may need to apply coordinate transformation. The deployment includes an `.xprofile` configuration:

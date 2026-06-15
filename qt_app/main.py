@@ -8,7 +8,7 @@ import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt, QtMsgType, QUrl, qInstallMessageHandler
+from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer, Qt, QtMsgType, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -80,15 +80,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def install_input_event_pump(interval_ms: int) -> QTimer | None:
+    if interval_ms <= 0:
+        LOG.info("Qt input event pump disabled")
+        return None
+
+    active = False
+    timer = QTimer()
+    timer.setInterval(interval_ms)
+    timer.setTimerType(Qt.PreciseTimer)
+
+    def pump_events() -> None:
+        nonlocal active
+        if active:
+            return
+        active = True
+        try:
+            QCoreApplication.processEvents(QEventLoop.AllEvents, 1)
+        finally:
+            active = False
+
+    timer.timeout.connect(pump_events)
+    timer.start()
+    LOG.info("Qt input event pump enabled every %sms", interval_ms)
+    return timer
+
+
 def main() -> int:
     configure_logging()
     install_qt_message_handler()
+    os.environ.setdefault("QT_XCB_NO_XI2", "1")
     args = parse_args()
     LOG.info(
-        "Starting FitPro Qt app windowed=%s wide_screen=%s api_base=%s",
+        "Starting FitPro Qt app windowed=%s wide_screen=%s api_base=%s qt_qpa=%s qt_xcb_no_xi2=%s",
         args.windowed,
         args.wide_screen,
         args.api_base_url or os.environ.get("FITPRO_API_BASE_URL") or "default",
+        os.environ.get("QT_QPA_PLATFORM", ""),
+        os.environ.get("QT_XCB_NO_XI2", ""),
     )
     QGuiApplication.setAttribute(Qt.AA_SynthesizeMouseForUnhandledTouchEvents, True)
     QGuiApplication.setAttribute(Qt.AA_SynthesizeTouchForUnhandledMouseEvents, True)
@@ -121,7 +150,12 @@ def main() -> int:
     heartbeat.start()
     LOG.info("Heartbeat logging enabled every %sms", heartbeat_ms)
 
+    input_pump_ms = int(os.environ.get("FITPRO_QT_INPUT_PUMP_MS", "50"))
+    input_pump = install_input_event_pump(input_pump_ms)
+
     exit_code = app.exec()
+    if input_pump is not None:
+        input_pump.stop()
     LOG.info("Qt app exiting with code %s", exit_code)
     return exit_code
 
