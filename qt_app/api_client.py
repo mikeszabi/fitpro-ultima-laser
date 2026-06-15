@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -12,6 +13,7 @@ from typing import Any
 
 
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000/api"
+LOG = logging.getLogger(__name__)
 
 
 class ApiError(RuntimeError):
@@ -64,15 +66,26 @@ class ApiClient:
         request_timeout = self.timeout if timeout is None else timeout
         for url in self._candidate_urls(path, query):
             request = urllib.request.Request(url, method="GET")
+            started_at = time.monotonic()
+            LOG.debug("http bytes START GET %s timeout=%s", url, request_timeout)
             try:
                 with urllib.request.urlopen(request, timeout=request_timeout) as response:
                     self._remember_working_base(url)
-                    return response.read()
+                    payload = response.read()
+                    duration_ms = (time.monotonic() - started_at) * 1000
+                    LOG.debug("http bytes OK GET %s status=%s bytes=%s %.0fms", url, response.status, len(payload), duration_ms)
+                    if duration_ms >= 1000:
+                        LOG.warning("http bytes SLOW GET %s %.0fms", url, duration_ms)
+                    return payload
             except urllib.error.HTTPError as exc:
                 last_error = exc
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("http bytes HTTPERROR GET %s status=%s %.0fms", url, exc.code, duration_ms)
                 if exc.code != 404:
                     raise self._api_error_from_http(exc)
             except urllib.error.URLError as exc:
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("http bytes URLERROR GET %s %.0fms: %s", url, duration_ms, exc)
                 raise self._api_error_from_exception(exc)
 
         raise self._api_error_from_exception(last_error)
@@ -97,16 +110,33 @@ class ApiClient:
         request_timeout = self.timeout if timeout is None else timeout
         for url in self._candidate_urls(path, query):
             request = urllib.request.Request(url, data=data, headers=headers, method=method)
+            quiet_path = path.startswith("/frame/") or path in {"/dot", "/mover/pos"}
+            started_at = time.monotonic()
+            if quiet_path:
+                LOG.debug("http START %s %s timeout=%s", method, url, request_timeout)
+            else:
+                LOG.info("http START %s %s timeout=%s", method, url, request_timeout)
             try:
                 with urllib.request.urlopen(request, timeout=request_timeout) as response:
                     self._remember_working_base(url)
                     payload = response.read()
+                    duration_ms = (time.monotonic() - started_at) * 1000
+                    if quiet_path:
+                        LOG.debug("http OK %s %s status=%s bytes=%s %.0fms", method, url, response.status, len(payload), duration_ms)
+                    else:
+                        LOG.info("http OK %s %s status=%s bytes=%s %.0fms", method, url, response.status, len(payload), duration_ms)
+                    if duration_ms >= 1000:
+                        LOG.warning("http SLOW %s %s %.0fms", method, url, duration_ms)
                     break
             except urllib.error.HTTPError as exc:
                 last_error = exc
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("http HTTPERROR %s %s status=%s %.0fms", method, url, exc.code, duration_ms)
                 if exc.code != 404:
                     raise self._api_error_from_http(exc)
             except urllib.error.URLError as exc:
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("http URLERROR %s %s %.0fms: %s", method, url, duration_ms, exc)
                 raise self._api_error_from_exception(exc)
         else:
             raise self._api_error_from_exception(last_error)
@@ -189,15 +219,26 @@ class ApiClient:
         last_error: Exception | None = None
         for url in self._candidate_urls("/frame/current", query):
             request = urllib.request.Request(url, method="GET")
+            started_at = time.monotonic()
+            LOG.debug("frame stream START GET %s timeout=%s", url, self.timeout)
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
                     self._remember_working_base(url)
-                    return self._read_first_jpeg(response)
+                    payload = self._read_first_jpeg(response)
+                    duration_ms = (time.monotonic() - started_at) * 1000
+                    LOG.debug("frame stream OK GET %s bytes=%s %.0fms", url, len(payload), duration_ms)
+                    if duration_ms >= 1000:
+                        LOG.warning("frame stream SLOW GET %s %.0fms", url, duration_ms)
+                    return payload
             except urllib.error.HTTPError as exc:
                 last_error = exc
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("frame stream HTTPERROR GET %s status=%s %.0fms", url, exc.code, duration_ms)
                 if exc.code != 404:
                     raise self._api_error_from_http(exc)
             except urllib.error.URLError as exc:
+                duration_ms = (time.monotonic() - started_at) * 1000
+                LOG.warning("frame stream URLERROR GET %s %.0fms: %s", url, duration_ms, exc)
                 raise self._api_error_from_exception(exc)
 
         raise self._api_error_from_exception(last_error)
@@ -326,8 +367,26 @@ class ApiClient:
     def set_detection_enabled(self, enabled: bool) -> Any:
         return self.post("/detection/toggle", {"enabled": enabled}, timeout=15.0)
 
+    def set_calibration_detection_enabled(self, enabled: bool) -> Any:
+        return self.post("/calibration/detection/toggle", {"enabled": enabled}, timeout=15.0)
+
+    def set_mask_overlay_enabled(self, enabled: bool) -> Any:
+        return self.post("/detection/mask_overlay", {"enabled": enabled}, timeout=15.0)
+
     def set_live_overlay_enabled(self, enabled: bool) -> Any:
         return self.post("/detection/live_overlay", {"enabled": enabled}, timeout=15.0)
+
+    def detection_hsv(self) -> Any:
+        return self.get("/detection/hsv")
+
+    def set_detection_hsv(self, values: dict[str, Any]) -> Any:
+        return self.post("/detection/hsv", values, timeout=15.0)
+
+    def dot(self) -> Any:
+        return self.get("/dot", timeout=2.0)
+
+    def frame_hsv(self, x: int, y: int) -> Any:
+        return self.get("/frame/hsv", {"x": x, "y": y}, timeout=4.0)
 
     def set_detection_confidence(self, confidence: float) -> Any:
         return self.post("/detection/conf", {"conf": confidence}, timeout=15.0)
@@ -366,6 +425,12 @@ class ApiClient:
     def arm_laser(self, enabled: bool) -> Any:
         return self.post("/laser/arm" if enabled else "/laser/disarm")
 
+    def laser_arm_enabled(self) -> Any:
+        return self.get("/laser/arm_en")
+
+    def laser_red_dot_enabled(self) -> Any:
+        return self.get("/laser/red_dot_en")
+
     def update_laser_settings(
         self,
         armed: bool,
@@ -390,6 +455,9 @@ class ApiClient:
     def set_red_dot(self, enabled: bool) -> Any:
         return self.post("/laser/red_dot", {"enabled": enabled})
 
+    def set_red_dot_enabled(self, enabled: bool) -> Any:
+        return self.post("/laser/red_dot_en", {"enabled": enabled})
+
     def fire_laser(self, duration_ms: int) -> Any:
         return self.post("/laser/fire", {"duration_ms": duration_ms})
 
@@ -398,3 +466,27 @@ class ApiClient:
 
     def set_vacuum_check_enabled(self, enabled: bool) -> Any:
         return self.post("/vacuum/check", {"enabled": enabled})
+
+    def mover_pos(self) -> Any:
+        return self.get("/mover/pos", timeout=2.0)
+
+    def mover_move(self, x: int, y: int) -> Any:
+        return self.post("/mover/move", {"x": x, "y": y}, timeout=15.0)
+
+    def mover_direction(self, direction: str, step: int) -> Any:
+        return self.post("/mover/direction", {"direction": direction, "step": step}, timeout=15.0)
+
+    def mover_move_image(self, x: int, y: int) -> Any:
+        return self.post("/mover/move_image", {"x": x, "y": y}, timeout=15.0)
+
+    def calibration_start(self) -> Any:
+        return self.post("/calibration/start", timeout=15.0)
+
+    def calibration_store(self) -> Any:
+        return self.post("/calibration/store", timeout=15.0)
+
+    def calibration_save(self) -> Any:
+        return self.post("/calibration/save", timeout=30.0)
+
+    def homography_reload(self) -> Any:
+        return self.post("/homography/reload", timeout=15.0)

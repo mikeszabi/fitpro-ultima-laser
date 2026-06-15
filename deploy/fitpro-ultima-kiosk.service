@@ -17,6 +17,7 @@ Environment=QT_QPA_PLATFORM=xcb
 Environment=QT_DEBUG_PLUGINS=1
 Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000/api
 Environment=PYTHONUNBUFFERED=1
+Environment=FITPRO_QT_LOG_LEVEL=INFO
 
 # Startup script
 ExecStart=/opt/fitpro-ultima-laser/qt_app/run-kiosk.sh

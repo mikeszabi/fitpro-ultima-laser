@@ -76,6 +76,7 @@ Item {
             text: "Recalibration"
             accent: "#ff0876"
             textColor: "#ff0876"
+            onClicked: appController.navigate("calibration")
         }
 
         Text {

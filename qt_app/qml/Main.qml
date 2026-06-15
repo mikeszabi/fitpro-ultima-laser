@@ -39,6 +39,7 @@ ApplicationWindow {
                 switch (appController.screen) {
                 case "login": return loginScreen
                 case "settings": return settingsScreen
+                case "calibration": return calibrationScreen
                 case "laser-treatment": return laserTreatmentScreen
                 case "system-info": return systemInfoScreen
                 case "hw-sw-test": return hwSwTestScreen
@@ -59,6 +60,7 @@ ApplicationWindow {
     Component { id: startScreen; StartScreen {} }
     Component { id: loginScreen; LoginScreen {} }
     Component { id: settingsScreen; SettingsScreen {} }
+    Component { id: calibrationScreen; CalibrationScreen {} }
     Component { id: laserTreatmentScreen; LaserTreatmentScreen {} }
     Component { id: systemInfoScreen; SystemInfoScreen {} }
     Component { id: hwSwTestScreen; HwSwTestScreen {} }

@@ -9,6 +9,7 @@ fi
 
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
 export FITPRO_API_BASE_URL="${FITPRO_API_BASE_URL:-http://127.0.0.1:8000/api}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec "${SCRIPT_DIR}/qt_venv/bin/python" "${SCRIPT_DIR}/main.py" --wide-screen

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import itertools
+import logging
 import subprocess
 import tempfile
 import threading
@@ -14,21 +16,44 @@ from PySide6.QtCore import QObject, Property, QRunnable, QThreadPool, Signal, Sl
 from api_client import ApiClient
 
 
+LOG = logging.getLogger(__name__)
+_WORKER_IDS = itertools.count(1)
+
+
 class WorkerSignals(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
 
 class ApiWorker(QRunnable):
-    def __init__(self, task: Callable[[], Any]) -> None:
+    def __init__(self, label: str, task: Callable[[], Any], quiet: bool = False) -> None:
         super().__init__()
+        self.label = label
         self.task = task
+        self.quiet = quiet
+        self.worker_id = next(_WORKER_IDS)
+        self.started_at = 0.0
         self.signals = WorkerSignals()
 
     def run(self) -> None:
+        self.started_at = time.monotonic()
+        if not self.quiet:
+            LOG.info("task[%s] START %s", self.worker_id, self.label)
+        else:
+            LOG.debug("task[%s] START %s", self.worker_id, self.label)
         try:
-            self.signals.finished.emit(self.task())
+            result = self.task()
+            duration_ms = (time.monotonic() - self.started_at) * 1000
+            if self.quiet:
+                LOG.debug("task[%s] OK %s %.0fms", self.worker_id, self.label, duration_ms)
+            else:
+                LOG.info("task[%s] OK %s %.0fms", self.worker_id, self.label, duration_ms)
+            if duration_ms >= 3000:
+                LOG.warning("task[%s] SLOW %s %.0fms", self.worker_id, self.label, duration_ms)
+            self.signals.finished.emit(result)
         except Exception as exc:
+            duration_ms = (time.monotonic() - self.started_at) * 1000
+            LOG.exception("task[%s] FAIL %s %.0fms: %s", self.worker_id, self.label, duration_ms, exc)
             self.signals.failed.emit(str(exc))
 
 
@@ -42,6 +67,7 @@ class AppController(QObject):
     redDotChanged = Signal()
     vacuumChanged = Signal()
     targetChanged = Signal()
+    calibrationChanged = Signal()
     cameraFrameUrlChanged = Signal()
     errorChanged = Signal()
     diagnosticsChanged = Signal()
@@ -81,12 +107,43 @@ class AppController(QObject):
         self._target_error_clear = True
         self._app_state_running = False
         self._laser_temp = "-"
+        self._calibration_detection_enabled = False
+        self._mask_overlay_enabled = False
+        self._dot_image_x = "-"
+        self._dot_image_y = "-"
+        self._hsv_click_x = "-"
+        self._hsv_click_y = "-"
+        self._hsv_click_value = "-"
+        self._rgb_click_value = "-"
+        self._galvo_x = "-"
+        self._galvo_y = "-"
+        self._move_x = 3000
+        self._move_y = 3000
+        self._move_step = 25
+        self._stored_count = 0
+        self._clicked_image_x = "-"
+        self._clicked_image_y = "-"
+        self._target_galvo_x = "-"
+        self._target_galvo_y = "-"
+        self._move_result = "-"
+        self._homography_status = "not loaded"
+        self._hsv_lower1 = [0, 50, 250]
+        self._hsv_upper1 = [20, 240, 255]
+        self._hsv_lower2 = [160, 50, 250]
+        self._hsv_upper2 = [180, 240, 255]
         self._settings_dirty = True
         self._treatment_log = ""
         self._camera_frame_dir = Path(tempfile.gettempdir()) / "fitpro-ultima-laser"
         self._camera_frame_dir.mkdir(parents=True, exist_ok=True)
         self._camera_frame_slot = 0
         self._camera_refresh_in_flight = False
+        self._calibration_telemetry_in_flight = False
+        self._camera_frame_started_at = 0.0
+        self._camera_frame_count = 0
+        self._camera_skip_busy_count = 0
+        self._camera_skip_in_flight_count = 0
+        self._camera_skip_interval_count = 0
+        self._last_camera_progress_log_at = 0.0
         self._camera_last_refresh_at = 0.0
         self._camera_min_refresh_interval = 0.25
         self._camera_last_error = ""
@@ -218,6 +275,102 @@ class AppController(QObject):
     def laserTemp(self) -> str:
         return self._laser_temp
 
+    @Property(bool, notify=calibrationChanged)
+    def calibrationDetectionEnabled(self) -> bool:
+        return self._calibration_detection_enabled
+
+    @Property(bool, notify=calibrationChanged)
+    def maskOverlayEnabled(self) -> bool:
+        return self._mask_overlay_enabled
+
+    @Property(str, notify=calibrationChanged)
+    def dotImageX(self) -> str:
+        return self._dot_image_x
+
+    @Property(str, notify=calibrationChanged)
+    def dotImageY(self) -> str:
+        return self._dot_image_y
+
+    @Property(str, notify=calibrationChanged)
+    def hsvClickX(self) -> str:
+        return self._hsv_click_x
+
+    @Property(str, notify=calibrationChanged)
+    def hsvClickY(self) -> str:
+        return self._hsv_click_y
+
+    @Property(str, notify=calibrationChanged)
+    def hsvClickValue(self) -> str:
+        return self._hsv_click_value
+
+    @Property(str, notify=calibrationChanged)
+    def rgbClickValue(self) -> str:
+        return self._rgb_click_value
+
+    @Property(str, notify=calibrationChanged)
+    def galvoX(self) -> str:
+        return self._galvo_x
+
+    @Property(str, notify=calibrationChanged)
+    def galvoY(self) -> str:
+        return self._galvo_y
+
+    @Property(int, notify=calibrationChanged)
+    def moveX(self) -> int:
+        return self._move_x
+
+    @Property(int, notify=calibrationChanged)
+    def moveY(self) -> int:
+        return self._move_y
+
+    @Property(int, notify=calibrationChanged)
+    def moveStep(self) -> int:
+        return self._move_step
+
+    @Property(int, notify=calibrationChanged)
+    def storedCount(self) -> int:
+        return self._stored_count
+
+    @Property(str, notify=calibrationChanged)
+    def clickedImageX(self) -> str:
+        return self._clicked_image_x
+
+    @Property(str, notify=calibrationChanged)
+    def clickedImageY(self) -> str:
+        return self._clicked_image_y
+
+    @Property(str, notify=calibrationChanged)
+    def targetGalvoX(self) -> str:
+        return self._target_galvo_x
+
+    @Property(str, notify=calibrationChanged)
+    def targetGalvoY(self) -> str:
+        return self._target_galvo_y
+
+    @Property(str, notify=calibrationChanged)
+    def moveResult(self) -> str:
+        return self._move_result
+
+    @Property(str, notify=calibrationChanged)
+    def homographyStatus(self) -> str:
+        return self._homography_status
+
+    @Property("QVariantList", notify=calibrationChanged)
+    def hsvLower1(self) -> list[int]:
+        return self._hsv_lower1
+
+    @Property("QVariantList", notify=calibrationChanged)
+    def hsvUpper1(self) -> list[int]:
+        return self._hsv_upper1
+
+    @Property("QVariantList", notify=calibrationChanged)
+    def hsvLower2(self) -> list[int]:
+        return self._hsv_lower2
+
+    @Property("QVariantList", notify=calibrationChanged)
+    def hsvUpper2(self) -> list[int]:
+        return self._hsv_upper2
+
     @Property(bool, notify=targetChanged)
     def settingsDirty(self) -> bool:
         return self._settings_dirty
@@ -284,38 +437,54 @@ class AppController(QObject):
     @Slot(str)
     def navigate(self, screen: str) -> None:
         if self._screen == screen:
+            LOG.info("Navigation ignored; already on screen=%s", screen)
             return
+        previous_screen = self._screen
+        LOG.info("Navigation %s -> %s", previous_screen, screen)
         if self._screen == "laser-treatment" and screen != "laser-treatment":
             self.stopTreatmentCameraStream()
         self._screen = screen
         self.screenChanged.emit()
         if screen == "laser-treatment":
             self.syncBackend()
+        elif screen == "calibration":
+            self.initializeCalibrationPage()
 
     @Slot()
     def clearError(self) -> None:
+        LOG.info("Clearing error dialog title=%r message=%r", self._error_title, self._error_message)
         self._error_title = ""
         self._error_message = ""
         self.errorChanged.emit()
 
     @Slot()
     def refreshCameraFrame(self) -> None:
-        if self._screen != "laser-treatment":
+        if self._screen not in {"laser-treatment", "calibration"}:
             return
         if self._busy:
+            self._camera_skip_busy_count += 1
+            self._log_camera_skips()
             return
         if self._camera_refresh_in_flight:
+            self._camera_skip_in_flight_count += 1
+            self._log_camera_skips()
             return
         now = time.monotonic()
         if now - self._camera_last_refresh_at < self._camera_min_refresh_interval:
+            self._camera_skip_interval_count += 1
             return
 
         self._camera_refresh_in_flight = True
+        self._camera_frame_started_at = now
         self._camera_last_refresh_at = now
+        frame_number = self._camera_frame_count + 1
+        if now - self._last_camera_progress_log_at > 5:
+            LOG.info("camera[%s] START screen=%s overlay=%s targets=%s", frame_number, self._screen, self._overlay_enabled, self._loaded_target_count)
+            self._last_camera_progress_log_at = now
 
         def task() -> str:
             timestamp = int(time.time() * 1000)
-            if self._overlay_enabled or self._loaded_target_count > 0:
+            if self._screen == "calibration" or self._overlay_enabled or self._loaded_target_count > 0:
                 payload = self._api.current_frame_bytes(timestamp)
             else:
                 payload = self._api.snapshot_bytes(timestamp)
@@ -329,7 +498,7 @@ class AppController(QObject):
             os.replace(tmp_path, frame_path)
             return f"{frame_path.as_uri()}?t={timestamp}"
 
-        worker = ApiWorker(task)
+        worker = ApiWorker("Camera frame", task, quiet=True)
         self._workers.append(worker)
         worker.signals.finished.connect(
             lambda url, worker=worker: self._cameraFrameReady.emit(str(url), worker)
@@ -342,6 +511,7 @@ class AppController(QObject):
     @Slot()
     def syncBackend(self) -> None:
         if self._sync_backend_in_flight:
+            LOG.debug("Backend sync skipped; already in flight")
             return
         self._sync_backend_in_flight = True
 
@@ -352,6 +522,197 @@ class AppController(QObject):
             }
 
         self._run("Backend sync", task, self._apply_backend_state, busy=False)
+
+    @Slot()
+    def initializeCalibrationPage(self) -> None:
+        LOG.info("Initializing calibration page")
+        def task() -> dict[str, Any]:
+            detection = self._api.detection_status()
+            hsv = self._api.detection_hsv()
+            arm = self._api.laser_arm_enabled()
+            red_dot = self._api.laser_red_dot_enabled()
+            pos = self._api.mover_pos()
+            return {
+                "detection": detection,
+                "hsv": hsv,
+                "arm": arm,
+                "red_dot": red_dot,
+                "pos": pos,
+            }
+
+        self._run("Calibration init", task, self._apply_calibration_status, busy=False)
+
+    @Slot()
+    def refreshCalibrationTelemetry(self) -> None:
+        if self._screen != "calibration":
+            return
+        if self._calibration_telemetry_in_flight:
+            LOG.debug("Calibration telemetry skipped; already in flight")
+            return
+        self._calibration_telemetry_in_flight = True
+
+        def task() -> dict[str, Any]:
+            data: dict[str, Any] = {}
+            try:
+                data["dot"] = self._api.dot()
+            except Exception as exc:
+                data["dot_error"] = str(exc)
+            try:
+                data["pos"] = self._api.mover_pos()
+            except Exception as exc:
+                data["pos_error"] = str(exc)
+            return data
+
+        self._run("Calibration telemetry", task, self._apply_calibration_telemetry, busy=False)
+
+    @Slot(bool)
+    def setCalibrationDetection(self, enabled: bool) -> None:
+        LOG.info("Calibration detection requested enabled=%s", enabled)
+        self._run(
+            "Calibration detection",
+            lambda: self._api.set_calibration_detection_enabled(enabled),
+            self._apply_calibration_detection,
+        )
+
+    @Slot(bool)
+    def setMaskOverlay(self, enabled: bool) -> None:
+        LOG.info("Mask overlay requested enabled=%s", enabled)
+        self._run(
+            "Mask overlay",
+            lambda: self._api.set_mask_overlay_enabled(enabled),
+            self._apply_mask_overlay,
+        )
+
+    @Slot()
+    def disableCalibrationMode(self) -> None:
+        LOG.info("Disable calibration mode requested")
+
+        def task() -> dict[str, Any]:
+            results: dict[str, Any] = {}
+            results["mask"] = self._api.set_mask_overlay_enabled(False)
+            results["detection"] = self._api.set_calibration_detection_enabled(False)
+            results["red_dot"] = self._api.set_red_dot_enabled(False)
+            results["arm"] = self._api.arm_laser(False)
+            return results
+
+        self._run("Disable calibration mode", task, self._apply_calibration_mode_disabled)
+
+    def _disable_treatment_entry_unsafe_states(self) -> None:
+        LOG.info("Treatment entry safety shutdown requested")
+        self._apply_unsafe_outputs_disabled()
+
+        commands: tuple[tuple[str, Callable[[], Any]], ...] = (
+            ("treatment detection off", lambda: self._api.set_detection_enabled(False)),
+            ("live overlay off", lambda: self._api.set_live_overlay_enabled(False)),
+            ("mask overlay off", lambda: self._api.set_mask_overlay_enabled(False)),
+            ("calibration detection off", lambda: self._api.set_calibration_detection_enabled(False)),
+            ("red dot off", lambda: self._api.set_red_dot(False)),
+            ("red dot enable off", lambda: self._api.set_red_dot_enabled(False)),
+            ("laser disarm", lambda: self._api.arm_laser(False)),
+            ("vacuum off", lambda: self._api.set_vacuum_enabled(False)),
+        )
+        for label, command in commands:
+            thread = threading.Thread(
+                target=self._fire_and_forget_safety_command,
+                args=(label, command),
+                daemon=True,
+            )
+            thread.start()
+
+    @Slot(str, str, int, int)
+    def setHsvChannel(self, range_name: str, bound_name: str, channel: int, value: int) -> None:
+        LOG.info("HSV change range=%s bound=%s channel=%s value=%s", range_name, bound_name, channel, value)
+        target = self._hsv_target(range_name, bound_name)
+        if target is None or channel < 0 or channel > 2:
+            return
+        limit = 180 if channel == 0 else 255
+        target[channel] = max(0, min(limit, int(value)))
+        self.calibrationChanged.emit()
+
+        values = self._hsv_payload()
+        self._run("HSV limits", lambda: self._api.set_detection_hsv(values), self._apply_hsv_status, busy=False)
+
+    @Slot(bool)
+    def setCalibrationLaserArm(self, enabled: bool) -> None:
+        LOG.info("Calibration laser arm requested enabled=%s", enabled)
+        self._run("Laser arm" if enabled else "Laser disarm", lambda: self._api.arm_laser(enabled), lambda _: self._apply_laser_ready(enabled))
+
+    @Slot(bool)
+    def setCalibrationRedDot(self, enabled: bool) -> None:
+        LOG.info("Calibration red dot requested enabled=%s", enabled)
+        self._run("Red dot", lambda: self._api.set_red_dot_enabled(enabled), lambda _: self._apply_red_dot(enabled))
+
+    @Slot(int, int)
+    def setMoveTarget(self, x: int, y: int) -> None:
+        self._move_x = max(0, min(4095, int(x)))
+        self._move_y = max(0, min(4095, int(y)))
+        self.calibrationChanged.emit()
+
+    @Slot(int)
+    def setMoveStep(self, step: int) -> None:
+        self._move_step = max(1, min(1000, int(step)))
+        self.calibrationChanged.emit()
+
+    @Slot()
+    def moveGalvoToTarget(self) -> None:
+        LOG.info("Galvo move requested x=%s y=%s", self._move_x, self._move_y)
+        self._run(
+            "Galvo move",
+            lambda: self._api.mover_move(self._move_x, self._move_y),
+            self._apply_galvo_move_result,
+        )
+
+    @Slot(str)
+    def moveGalvoDirection(self, direction: str) -> None:
+        if direction not in {"up", "down", "left", "right"}:
+            LOG.warning("Ignoring invalid galvo direction=%s", direction)
+            return
+        LOG.info("Galvo direction requested direction=%s step=%s", direction, self._move_step)
+        self._run(
+            f"Galvo {direction}",
+            lambda: self._api.mover_direction(direction, self._move_step),
+            self._apply_galvo_move_result,
+        )
+
+    @Slot()
+    def startCalibrationCollection(self) -> None:
+        LOG.info("Calibration point collection start requested")
+        self._run("Calibration start", self._api.calibration_start, self._apply_calibration_start)
+
+    @Slot()
+    def storeCalibrationPoint(self) -> None:
+        LOG.info("Calibration store point requested")
+        self._run("Store point", self._api.calibration_store, self._apply_calibration_store)
+
+    @Slot()
+    def saveCalibration(self) -> None:
+        LOG.info("Calibration save requested stored_count=%s", self._stored_count)
+        self._run("Save calibration", self._api.calibration_save, self._apply_calibration_save)
+
+    @Slot()
+    def reloadHomography(self) -> None:
+        LOG.info("Homography reload requested")
+        self._run("Reload homography", self._api.homography_reload, self._apply_homography_reload)
+
+    @Slot(int, int, bool)
+    def handleCalibrationImageClick(self, x: int, y: int, hsv_inspect: bool) -> None:
+        LOG.info("Calibration image click x=%s y=%s hsv_inspect=%s", x, y, hsv_inspect)
+        self._clicked_image_x = str(x)
+        self._clicked_image_y = str(y)
+        self.calibrationChanged.emit()
+        if hsv_inspect:
+            self._run(
+                "HSV inspect",
+                lambda: self._api.frame_hsv(x, y),
+                self._apply_hsv_click,
+                busy=False,
+            )
+            return
+        self._run(
+            "Image move",
+            lambda: self._api.mover_move_image(x, y),
+            self._apply_image_move,
+        )
 
     @Slot(str)
     def restartBackend(self, sudo_password: str) -> None:
@@ -474,12 +835,14 @@ class AppController(QObject):
 
     @Slot()
     def initializeTreatmentPage(self) -> None:
+        self._disable_treatment_entry_unsafe_states()
+
         def task() -> Any:
             self._api.startup_clean_state()
             self._api.set_treatment_app_mode("semi_auto")
             return self._api.treatment_app_status()
 
-        self._run("Treatment init", task, self._apply_treatment_status)
+        self._run("Treatment init", task, self._apply_treatment_entry_status)
 
     @Slot()
     def startTreatmentCameraStream(self) -> None:
@@ -628,6 +991,19 @@ class AppController(QObject):
             status.update(data)
         return status if isinstance(status, dict) else {}
 
+    def _fire_and_forget_safety_command(self, label: str, command: Callable[[], Any]) -> None:
+        started_at = time.monotonic()
+        LOG.info("safety command START %s", label)
+        try:
+            command()
+            duration_ms = (time.monotonic() - started_at) * 1000
+            LOG.info("safety command OK %s %.0fms", label, duration_ms)
+            if duration_ms >= 3000:
+                LOG.warning("safety command SLOW %s %.0fms", label, duration_ms)
+        except Exception as exc:
+            duration_ms = (time.monotonic() - started_at) * 1000
+            LOG.warning("safety command FAIL %s %.0fms: %s", label, duration_ms, exc)
+
     def _run(
         self,
         label: str,
@@ -635,11 +1011,27 @@ class AppController(QObject):
         on_success: Callable[[Any], None],
         busy: bool = True,
     ) -> None:
+        quiet = label in {"Backend sync", "Calibration telemetry"}
+        LOG.info(
+            "queue task label=%s busy=%s quiet=%s screen=%s workers=%s",
+            label,
+            busy,
+            quiet,
+            self._screen,
+            len(self._workers),
+        ) if not quiet else LOG.debug(
+            "queue task label=%s busy=%s quiet=%s screen=%s workers=%s",
+            label,
+            busy,
+            quiet,
+            self._screen,
+            len(self._workers),
+        )
         if busy:
             self._set_busy(True)
-        if label != "Backend sync":
+        if not quiet:
             self._set_status(f"{label}...")
-        worker = ApiWorker(task)
+        worker = ApiWorker(label, task, quiet=quiet)
         self._workers.append(worker)
         worker.signals.finished.connect(
             lambda result, worker=worker: self._taskFinished.emit(label, result, on_success, busy, worker)
@@ -651,16 +1043,24 @@ class AppController(QObject):
 
     @Slot(str, object)
     def _handle_camera_frame_ready(self, url: str, worker: object) -> None:
+        duration_ms = (time.monotonic() - self._camera_frame_started_at) * 1000 if self._camera_frame_started_at else 0.0
         self._camera_refresh_in_flight = False
         self._camera_last_error = ""
+        self._camera_frame_count += 1
         self._release_worker(worker)
         self._camera_frame_url = url
+        if duration_ms >= 1000 or self._camera_frame_count % 20 == 0:
+            LOG.info("camera[%s] OK %.0fms url=%s", self._camera_frame_count, duration_ms, url)
+        if duration_ms >= 3000:
+            LOG.warning("camera[%s] SLOW %.0fms", self._camera_frame_count, duration_ms)
         self.cameraFrameUrlChanged.emit()
 
     @Slot(str, object)
     def _handle_camera_frame_failed(self, message: str, worker: object) -> None:
+        duration_ms = (time.monotonic() - self._camera_frame_started_at) * 1000 if self._camera_frame_started_at else 0.0
         self._camera_refresh_in_flight = False
         self._release_worker(worker)
+        LOG.warning("camera frame FAIL %.0fms: %s", duration_ms, message)
         if message != self._camera_last_error:
             self._camera_last_error = message
             self._set_status(f"Camera frame: {message}")
@@ -674,7 +1074,9 @@ class AppController(QObject):
         busy: bool,
         worker: object,
     ) -> None:
+        LOG.debug("task callback start label=%s worker=%s", label, getattr(worker, "worker_id", "?"))
         on_success(result)
+        LOG.debug("task callback applied label=%s worker=%s", label, getattr(worker, "worker_id", "?"))
         if label == "Backend sync":
             self._sync_backend_in_flight = False
             self._backend_sync_error = ""
@@ -682,16 +1084,21 @@ class AppController(QObject):
             self._backend_ok = True
             if backend_changed:
                 self.targetChanged.emit()
-        if label != "Backend sync":
+        quiet = label in {"Backend sync", "Calibration telemetry"}
+        if not quiet:
             self._set_status(f"{label}: OK")
-        if label != "Backend sync":
+        if not quiet:
             self._append_log(f"{label}: OK")
+        if label == "Calibration telemetry":
+            self._calibration_telemetry_in_flight = False
         self._release_worker(worker)
         if busy:
             self._set_busy(False)
+        LOG.debug("task callback done label=%s workers=%s", label, len(self._workers))
 
     @Slot(str, str, bool, object)
     def _handle_task_failed(self, label: str, message: str, busy: bool, worker: object) -> None:
+        LOG.warning("task callback fail label=%s worker=%s message=%s", label, getattr(worker, "worker_id", "?"), message)
         if label == "Backend sync":
             self._sync_backend_in_flight = False
             if message != self._backend_sync_error:
@@ -705,6 +1112,8 @@ class AppController(QObject):
             if busy:
                 self._set_busy(False)
             return
+        if label == "Calibration telemetry":
+            self._calibration_telemetry_in_flight = False
         self._set_status(message)
         if label != "Backend sync":
             self._append_log(f"{label}: {message}")
@@ -729,7 +1138,51 @@ class AppController(QObject):
         try:
             self._workers.remove(worker)
         except ValueError:
-            pass
+            LOG.debug("Worker already released: %s", getattr(worker, "worker_id", "?"))
+
+    @Slot()
+    def logHeartbeat(self) -> None:
+        in_flight = [
+            f"{getattr(worker, 'worker_id', '?')}:{getattr(worker, 'label', '?')}"
+            for worker in self._workers
+        ]
+        camera_age = (
+            time.monotonic() - self._camera_frame_started_at
+            if self._camera_refresh_in_flight and self._camera_frame_started_at
+            else 0.0
+        )
+        LOG.info(
+            "heartbeat screen=%s busy=%s workers=%s in_flight=%s camera_in_flight=%s camera_age=%.1fs frames=%s backend_ok=%s app_state=%s target_state=%s targets=%s skips(busy=%s,inflight=%s,interval=%s)",
+            self._screen,
+            self._busy,
+            len(self._workers),
+            ",".join(in_flight) if in_flight else "-",
+            self._camera_refresh_in_flight,
+            camera_age,
+            self._camera_frame_count,
+            self._backend_ok,
+            self._app_state,
+            self._target_state,
+            self._loaded_target_count,
+            self._camera_skip_busy_count,
+            self._camera_skip_in_flight_count,
+            self._camera_skip_interval_count,
+        )
+
+    def _log_camera_skips(self) -> None:
+        now = time.monotonic()
+        if now - self._last_camera_progress_log_at < 5:
+            return
+        LOG.info(
+            "camera refresh skipped screen=%s busy=%s in_flight=%s skips(busy=%s,inflight=%s,interval=%s)",
+            self._screen,
+            self._busy,
+            self._camera_refresh_in_flight,
+            self._camera_skip_busy_count,
+            self._camera_skip_in_flight_count,
+            self._camera_skip_interval_count,
+        )
+        self._last_camera_progress_log_at = now
 
     @staticmethod
     def _is_supported_image(payload: bytes) -> bool:
@@ -786,6 +1239,220 @@ class AppController(QObject):
     def _apply_laser_temp(self, value: str) -> None:
         self._laser_temp = value
         self.targetChanged.emit()
+
+    def _apply_calibration_status(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            data = {}
+        detection = data.get("detection", {})
+        hsv = data.get("hsv", {})
+        pos = data.get("pos", {})
+
+        if isinstance(detection, dict):
+            self._calibration_detection_enabled = bool(
+                detection.get("detection_enabled", self._calibration_detection_enabled)
+            )
+            self._mask_overlay_enabled = bool(
+                detection.get("mask_overlay_enabled", self._mask_overlay_enabled)
+            )
+            self._apply_hsv_status(detection)
+        if isinstance(hsv, dict):
+            self._apply_hsv_status(hsv)
+
+        self._laser_ready = self._response_enabled(data.get("arm"), self._laser_ready)
+        self._red_dot = self._response_enabled(data.get("red_dot"), self._red_dot)
+        self._apply_galvo_position(pos)
+
+        self.laserStateChanged.emit()
+        self.redDotChanged.emit()
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_telemetry(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        dot = data.get("dot", {})
+        if isinstance(dot, dict) and dot.get("x") is not None and dot.get("y") is not None:
+            self._dot_image_x = str(dot.get("x"))
+            self._dot_image_y = str(dot.get("y"))
+        elif "dot" in data:
+            self._dot_image_x = "-"
+            self._dot_image_y = "-"
+        self._apply_galvo_position(data.get("pos", {}))
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_detection(self, data: Any) -> None:
+        if isinstance(data, dict):
+            self._calibration_detection_enabled = bool(
+                data.get("detection_enabled", self._calibration_detection_enabled)
+            )
+            self._red_dot = bool(data.get("red_dot", self._red_dot))
+        self.redDotChanged.emit()
+        self.calibrationChanged.emit()
+
+    def _apply_mask_overlay(self, data: Any) -> None:
+        if isinstance(data, dict):
+            self._mask_overlay_enabled = bool(data.get("mask_overlay_enabled", self._mask_overlay_enabled))
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_mode_disabled(self, data: Any) -> None:
+        self._apply_unsafe_outputs_disabled()
+
+    def _apply_unsafe_outputs_disabled(self) -> None:
+        self._detection_enabled = False
+        self._overlay_enabled = False
+        self._mask_overlay_enabled = False
+        self._calibration_detection_enabled = False
+        self._red_dot = False
+        self._laser_ready = False
+        self._vacuum_enabled = False
+        self.redDotChanged.emit()
+        self.laserStateChanged.emit()
+        self.vacuumChanged.emit()
+        self.targetChanged.emit()
+        self.calibrationChanged.emit()
+
+    def _apply_treatment_entry_status(self, data: Any) -> None:
+        self._apply_treatment_status(data)
+        self._apply_unsafe_outputs_disabled()
+
+    def _apply_hsv_status(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        self._set_hsv_array("_hsv_lower1", data.get("hsv_lower1"))
+        self._set_hsv_array("_hsv_upper1", data.get("hsv_upper1"))
+        self._set_hsv_array("_hsv_lower2", data.get("hsv_lower2"))
+        self._set_hsv_array("_hsv_upper2", data.get("hsv_upper2"))
+        self.calibrationChanged.emit()
+
+    def _apply_galvo_move_result(self, data: Any) -> None:
+        if isinstance(data, dict):
+            if "new_position" in data:
+                pos = data.get("new_position")
+                if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                    self._galvo_x = str(pos[0])
+                    self._galvo_y = str(pos[1])
+            elif "x" in data and "y" in data:
+                self._galvo_x = str(data.get("x"))
+                self._galvo_y = str(data.get("y"))
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_start(self, data: Any) -> None:
+        self._stored_count = 0
+        self._homography_status = "collection started"
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_store(self, data: Any) -> None:
+        if isinstance(data, dict):
+            self._stored_count = int(data.get("stored", self._stored_count) or 0)
+            if data.get("error"):
+                self._homography_status = str(data.get("error"))
+        self.calibrationChanged.emit()
+
+    def _apply_calibration_save(self, data: Any) -> None:
+        if isinstance(data, dict):
+            status = str(data.get("status", "-"))
+            count = int(data.get("count", self._stored_count) or 0)
+            self._stored_count = count
+            if status == "saved":
+                self._homography_status = f"saved ({count} points)"
+            else:
+                self._homography_status = f"{status} ({count} points)"
+        self.calibrationChanged.emit()
+
+    def _apply_homography_reload(self, data: Any) -> None:
+        if isinstance(data, dict):
+            self._homography_status = str(data.get("status", data.get("error", data)))
+        else:
+            self._homography_status = str(data)
+        self.calibrationChanged.emit()
+
+    def _apply_hsv_click(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        self._hsv_click_x = str(data.get("x", "-"))
+        self._hsv_click_y = str(data.get("y", "-"))
+        hsv = data.get("hsv")
+        rgb = data.get("rgb")
+        self._hsv_click_value = ", ".join(str(value) for value in hsv) if isinstance(hsv, list) else "-"
+        self._rgb_click_value = ", ".join(str(value) for value in rgb) if isinstance(rgb, list) else "-"
+        self.calibrationChanged.emit()
+
+    def _apply_image_move(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            self._move_result = "-"
+            self.calibrationChanged.emit()
+            return
+        if data.get("error"):
+            self._target_galvo_x = "-"
+            self._target_galvo_y = "-"
+            self._move_result = "homography not available"
+        else:
+            target = data.get("target")
+            position = data.get("new_position")
+            if isinstance(target, (list, tuple)) and len(target) >= 2:
+                self._target_galvo_x = str(target[0])
+                self._target_galvo_y = str(target[1])
+            if isinstance(position, (list, tuple)) and len(position) >= 2:
+                self._galvo_x = str(position[0])
+                self._galvo_y = str(position[1])
+                self._move_result = f"{position[0]}, {position[1]}"
+            else:
+                self._move_result = "OK"
+        self.calibrationChanged.emit()
+
+    def _apply_galvo_position(self, data: Any) -> None:
+        if isinstance(data, dict):
+            x = data.get("x")
+            y = data.get("y")
+            self._galvo_x = "ERR" if x is None else str(x)
+            self._galvo_y = "ERR" if y is None else str(y)
+
+    def _hsv_target(self, range_name: str, bound_name: str) -> list[int] | None:
+        mapping = {
+            ("1", "lower"): self._hsv_lower1,
+            ("1", "upper"): self._hsv_upper1,
+            ("2", "lower"): self._hsv_lower2,
+            ("2", "upper"): self._hsv_upper2,
+        }
+        return mapping.get((str(range_name), str(bound_name)))
+
+    def _hsv_payload(self) -> dict[str, int]:
+        return {
+            "lower1_h": self._hsv_lower1[0],
+            "lower1_s": self._hsv_lower1[1],
+            "lower1_v": self._hsv_lower1[2],
+            "upper1_h": self._hsv_upper1[0],
+            "upper1_s": self._hsv_upper1[1],
+            "upper1_v": self._hsv_upper1[2],
+            "lower2_h": self._hsv_lower2[0],
+            "lower2_s": self._hsv_lower2[1],
+            "lower2_v": self._hsv_lower2[2],
+            "upper2_h": self._hsv_upper2[0],
+            "upper2_s": self._hsv_upper2[1],
+            "upper2_v": self._hsv_upper2[2],
+        }
+
+    def _set_hsv_array(self, attr: str, value: Any) -> None:
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            setattr(self, attr, [int(value[0]), int(value[1]), int(value[2])])
+
+    @staticmethod
+    def _response_enabled(data: Any, fallback: bool) -> bool:
+        if isinstance(data, dict):
+            for key in ("armed", "enabled", "red_dot", "red_dot_enabled"):
+                if key in data:
+                    return bool(data.get(key))
+            text = AppController._response_text(data.get("response"))
+            if text:
+                return "->1" in text or "[1]" in text or text.endswith(" 1")
+        return fallback
+
+    @staticmethod
+    def _response_text(value: Any) -> str:
+        if isinstance(value, list):
+            return " | ".join(str(item) for item in value)
+        if value is None:
+            return ""
+        return str(value)
 
     def _apply_backend_restart_output(self, output: str) -> None:
         self._backend_restart_output = output
