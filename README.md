@@ -39,6 +39,10 @@ A native PySide6/QML kiosk application for the Ultima Laser treatment system, de
 
 Full system architecture documentation is available in [ARCHITECTURE.md](./ARCHITECTURE.md). It covers the microcontroller, Python backend, Qt frontend, and integration points.
 
+## User Guide
+
+The full Qt app operator guide is available in [qt_app/USER_GUIDE.md](./qt_app/USER_GUIDE.md). It explains the recommended workflow, each screen, and what every button does.
+
 ## Quick Start
 
 ### Development Setup

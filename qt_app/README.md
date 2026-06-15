@@ -2,6 +2,10 @@
 
 Natív PySide6/QML kiosk alkalmazás a Jetson célhardverhez. Ez az app nem böngészőben fut; a meglévő FastAPI backendhez csatlakozik HTTP-n keresztül.
 
+## User guide
+
+The full operator guide is available in [USER_GUIDE.md](./USER_GUIDE.md). It documents the recommended workflow, every screen, and what each button does.
+
 ## Fejlesztői indítás
 
 ```bash
