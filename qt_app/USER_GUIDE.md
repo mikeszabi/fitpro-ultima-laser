@@ -206,9 +206,9 @@ Available in manual mode. Enabled when at least one target is loaded. Applies pe
 
 Toggles the vacuum on or off.
 
-`CONFIDENCE` slider
+`CONFIDENCE` − / + controls
 
-Sets the detection confidence threshold. Higher values make detection stricter; lower values allow more detections.
+Sets the detection confidence threshold in precise, touchscreen-friendly steps. Higher values make detection stricter; lower values allow more detections. The allowed range, default, and step are configured in `config.json`.
 
 `Detection On` / `Detection Off`
 

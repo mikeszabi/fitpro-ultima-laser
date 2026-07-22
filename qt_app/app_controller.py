@@ -14,6 +14,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Property, QRunnable, QThreadPool, Signal, Slot
 
 from api_client import ApiClient
+from app_config import ConfidenceConfig, load_confidence_config
 
 
 LOG = logging.getLogger(__name__)
@@ -77,7 +78,11 @@ class AppController(QObject):
     _taskFailed = Signal(str, str, bool, object)
     _streamLog = Signal(str)
 
-    def __init__(self, api: ApiClient | None = None) -> None:
+    def __init__(
+        self,
+        api: ApiClient | None = None,
+        confidence_config: ConfidenceConfig | None = None,
+    ) -> None:
         super().__init__()
         self._api = api or ApiClient()
         self._pool = QThreadPool.globalInstance()
@@ -98,7 +103,8 @@ class AppController(QObject):
         self._target = False
         self._targeted_follicles = 0
         self._loaded_target_count = 0
-        self._confidence = 0.1
+        self._confidence_config = confidence_config or load_confidence_config()
+        self._confidence = self._confidence_config.default
         self._treatment_mode = "semi-auto"
         self._detection_enabled = False
         self._overlay_enabled = False
@@ -242,6 +248,22 @@ class AppController(QObject):
     @Property(float, notify=targetChanged)
     def confidence(self) -> float:
         return self._confidence
+
+    @Property(float, constant=True)
+    def confidenceMinimum(self) -> float:
+        return self._confidence_config.minimum
+
+    @Property(float, constant=True)
+    def confidenceMaximum(self) -> float:
+        return self._confidence_config.maximum
+
+    @Property(float, constant=True)
+    def confidenceDefault(self) -> float:
+        return self._confidence_config.default
+
+    @Property(float, constant=True)
+    def confidenceStep(self) -> float:
+        return self._confidence_config.step
 
     @Property(str, notify=targetChanged)
     def treatmentMode(self) -> str:
@@ -817,13 +839,20 @@ class AppController(QObject):
 
     @Slot(float)
     def setConfidence(self, confidence: float) -> None:
-        confidence = max(0.01, min(1.0, float(confidence)))
+        confidence = self._clamp_confidence(confidence)
 
         def task() -> float:
             self._api.set_detection_confidence(confidence)
             return confidence
 
         self._run("Detection confidence", task, self._apply_confidence)
+
+    def _clamp_confidence(self, confidence: float) -> float:
+        config = self._confidence_config
+        clamped = max(config.minimum, min(config.maximum, float(confidence)))
+        steps = round((clamped - config.minimum) / config.step)
+        snapped = round(config.minimum + steps * config.step, 10)
+        return max(config.minimum, min(config.maximum, snapped))
 
     @Slot()
     def captureAndLoadTargets(self) -> None:
@@ -1547,7 +1576,10 @@ class AppController(QObject):
         self._loaded_target_count = target_count
 
         if "detection_conf" in data:
-            self._confidence = max(0.01, min(1.0, float(data.get("detection_conf") or self._confidence)))
+            value = data.get("detection_conf")
+            self._confidence = self._clamp_confidence(
+                self._confidence if value is None else float(value)
+            )
 
         power = data.get("laser_power", {})
         if isinstance(power, dict):

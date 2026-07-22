@@ -109,9 +109,20 @@ Item {
     Text { x: 604; y: 744; text: "GUI version"; color: "#ffffff"; font.pixelSize: 20 }
     Text { x: 604; y: 792; text: "1.10.3"; color: "#6394ff"; font.pixelSize: 14 }
 
+    Text { x: 604; y: 830; text: "Confidence range / default"; color: "#ffffff"; font.pixelSize: 20 }
+    Text {
+        x: 604
+        y: 862
+        text: appController.confidenceMinimum.toFixed(3) + " – "
+              + appController.confidenceMaximum.toFixed(3) + " / "
+              + appController.confidenceDefault.toFixed(3)
+        color: "#6394ff"
+        font.pixelSize: 14
+    }
+
     AppButton {
         x: 604
-        y: 852
+        y: 910
         width: 300
         height: 60
         text: "GUI version check"
@@ -121,7 +132,7 @@ Item {
 
     AppButton {
         x: 604
-        y: 936
+        y: 994
         width: 300
         height: 60
         text: "HW/SW test"

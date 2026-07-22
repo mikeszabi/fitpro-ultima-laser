@@ -28,6 +28,26 @@ Felülírható:
 FITPRO_API_BASE_URL=http://127.0.0.1:8000 python main.py --windowed
 ```
 
+## Confidence konfiguráció
+
+A Laser Treatment oldalon használt detection confidence tartománya,
+alapértéke és érintőképernyős lépésköze a `config.json` fájlban állítható:
+
+```json
+{
+  "confidence": {
+    "minimum": 0.0,
+    "maximum": 0.25,
+    "default": 0.1,
+    "step": 0.005
+  }
+}
+```
+
+Hibás konfiguráció esetén az alkalmazás naplózza a hibát és a beépített
+alapértékeket használja. Az aktív tartomány és default a System Info oldalon
+is látható.
+
 ## Kiosk indítás
 
 ```bash
@@ -75,6 +95,8 @@ Touch UX állapot:
 ```text
 qt_app/
   main.py                 # PySide6 entrypoint
+  config.json             # kezelőfelületi tartományok és alapértékek
+  app_config.py           # konfiguráció betöltése és ellenőrzése
   app_controller.py       # natív app state + QML slotok
   api_client.py           # FastAPI backend kliens
   qml/

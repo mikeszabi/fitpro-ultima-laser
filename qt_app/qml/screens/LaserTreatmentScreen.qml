@@ -439,25 +439,57 @@ Item {
             y: 244
             width: 334
             height: 42
-            text: "CONFIDENCE: " + appController.confidence.toFixed(3)
+            text: "CONFIDENCE"
             font.pixelSize: 25
             horizontalAlignment: Text.AlignHCenter
         }
-        Slider {
-            x: 664
+        AppButton {
+            x: 630
             y: 292
-            width: 230
-            from: 0
-            to: 1
-            stepSize: 0.005
-            value: appController.confidence
-            live: false
-            onMoved: appController.setConfidence(value)
+            width: 82
+            height: 54
+            text: "\u2212"
+            accent: "#ffffff"
+            enabled: !appController.busy
+                     && appController.confidence > appController.confidenceMinimum
+            onClicked: appController.setConfidence(
+                appController.confidence - appController.confidenceStep
+            )
+        }
+        Rectangle {
+            x: 722
+            y: 292
+            width: 112
+            height: 54
+            radius: 12
+            color: "#19191f"
+            border.color: "#ffffff"
+            border.width: 1
+            FitText {
+                anchors.fill: parent
+                anchors.margins: 8
+                text: appController.confidence.toFixed(3)
+                font.pixelSize: 25
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+        AppButton {
+            x: 844
+            y: 292
+            width: 82
+            height: 54
+            text: "+"
+            accent: "#ffffff"
+            enabled: !appController.busy
+                     && appController.confidence < appController.confidenceMaximum
+            onClicked: appController.setConfidence(
+                appController.confidence + appController.confidenceStep
+            )
         }
 
         AppButton {
             x: 610
-            y: 344
+            y: 366
             width: 158
             height: 54
             text: appController.detectionEnabled ? "Detection Off" : "Detection On"
@@ -467,7 +499,7 @@ Item {
         }
         AppButton {
             x: 786
-            y: 344
+            y: 366
             width: 158
             height: 54
             text: appController.overlayEnabled ? "Overlay Off" : "Overlay On"
@@ -478,7 +510,7 @@ Item {
 
         AppButton {
             x: 610
-            y: 412
+            y: 434
             width: 158
             height: 54
             text: "Check States"
@@ -488,7 +520,7 @@ Item {
         }
         AppButton {
             x: 786
-            y: 412
+            y: 434
             width: 158
             height: 54
             text: "Cleanup"
