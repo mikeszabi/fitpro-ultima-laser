@@ -105,7 +105,7 @@ Item {
     Rectangle { anchors.fill: parent; color: "#26000000" }
 
     Timer {
-        interval: 250
+        interval: 500
         running: true
         repeat: true
         onTriggered: appController.refreshCameraFrame()

@@ -28,14 +28,7 @@ Item {
     }
 
     Timer {
-        interval: 30000
-        running: true
-        repeat: true
-        onTriggered: appController.syncBackend()
-    }
-
-    Timer {
-        interval: 250
+        interval: 500
         running: true
         repeat: true
         onTriggered: appController.refreshCameraFrame()
@@ -316,9 +309,9 @@ Item {
         y: 1180
         width: 320
         height: 72
-        text: appController.laserReady ? "DISARM" : "ARM"
+        text: appController.laserStateText === "UNKNOWN" ? "ARM UNKNOWN" : (appController.laserReady ? "DISARM" : "ARM")
         accent: "#ffffff"
-        enabled: !appController.busy
+        enabled: !appController.busy && appController.laserStateText !== "UNKNOWN"
         onClicked: appController.toggleArm()
     }
 
@@ -431,7 +424,7 @@ Item {
             }
             FitText { x: 7; width: 42; height: parent.height; text: "ON"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter }
             FitText { x: 49; width: 49; height: parent.height; text: "OFF"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter }
-            MouseArea { anchors.fill: parent; enabled: !appController.busy; onClicked: appController.toggleVacuum() }
+            MouseArea { anchors.fill: parent; enabled: !appController.busy && appController.vacuumStateText !== "UNKNOWN"; onClicked: appController.toggleVacuum() }
         }
 
         FitText {
@@ -492,9 +485,9 @@ Item {
             y: 366
             width: 158
             height: 54
-            text: appController.detectionEnabled ? "Detection Off" : "Detection On"
+            text: appController.detectionStateText === "UNKNOWN" ? "Detection ?" : (appController.detectionEnabled ? "Detection Off" : "Detection On")
             accent: appController.detectionEnabled ? "#ff7045" : "#ffffff"
-            enabled: !appController.busy
+            enabled: !appController.busy && appController.detectionStateText !== "UNKNOWN"
             onClicked: appController.toggleDetection()
         }
         AppButton {
@@ -502,9 +495,9 @@ Item {
             y: 366
             width: 158
             height: 54
-            text: appController.overlayEnabled ? "Overlay Off" : "Overlay On"
+            text: appController.overlayStateText === "UNKNOWN" ? "Overlay ?" : (appController.overlayEnabled ? "Overlay Off" : "Overlay On")
             accent: appController.overlayEnabled ? "#ff7045" : "#ffffff"
-            enabled: !appController.busy
+            enabled: !appController.busy && appController.overlayStateText !== "UNKNOWN"
             onClicked: appController.toggleOverlay()
         }
 
@@ -530,6 +523,14 @@ Item {
         }
 
         FitText {
+            x: 610; y: 4; width: 334; height: 28
+            text: appController.stateConnected ? "STATE: LIVE" : "STATE: RECONNECTING"
+            color: appController.stateConnected ? "#00d723" : "#f3bc55"
+            font.pixelSize: 16
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        FitText {
             x: 610
             y: 490
             width: 334
@@ -544,7 +545,7 @@ Item {
             y: 524
             width: 334
             height: 24
-            text: "APP: " + appController.appState + "    TARGETS: " + appController.loadedTargetCount
+            text: "APP: " + appController.appState + "    TARGETS: " + appController.loadedTargetText
             font.pixelSize: 15
             horizontalAlignment: Text.AlignHCenter
         }

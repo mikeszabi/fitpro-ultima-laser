@@ -49,13 +49,65 @@ ApplicationWindow {
         }
 
         ErrorDialog {
+            z: 20
             anchors.fill: parent
             titleText: appController.errorTitle
             messageText: appController.errorMessage
             visible: appController.errorMessage.length > 0
             onAccepted: appController.clearError()
         }
+
+        Rectangle {
+            id: backendTestOverlay
+            z: 10
+            anchors.fill: parent
+            visible: appController.startupCheckInProgress
+            color: "#d9071016"
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                preventStealing: true
+            }
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 760
+                height: 280
+                radius: 28
+                color: "#f21a252c"
+                border.color: "#72a0ff"
+                border.width: 2
+
+                BusyIndicator {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 38
+                    width: 86
+                    height: 86
+                    running: backendTestOverlay.visible
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 142
+                    text: "Connecting to backend"
+                    color: "#ffffff"
+                    font.pixelSize: 28
+                    font.bold: true
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 196
+                    text: "Checking backend and device readiness. User actions are temporarily disabled."
+                    color: "#cbd5da"
+                    font.pixelSize: 17
+                }
+            }
+        }
     }
+
+    Component.onCompleted: appController.runStartupBackendCheck()
 
     Component { id: startScreen; StartScreen {} }
     Component { id: loginScreen; LoginScreen {} }

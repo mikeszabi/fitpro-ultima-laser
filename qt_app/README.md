@@ -79,9 +79,9 @@ végre, maradjon bekapcsolva a `QT_XCB_NO_XI2=1` környezeti változó. A launch
 scriptek és service fájlok ezt alapból beállítják, hogy Qt X11 alatt a
 stabilabb legacy mouse event útvonalat használja az XInput2 touch útvonal
 helyett.
-Az app alapból egy kis Qt input event pumpot is futtat
-(`FITPRO_QT_INPUT_PUMP_MS=50`), hogy a függőben lévő X11 input események
-rendszeresen feldolgozásra kerüljenek. Teszteléshez `0` értékkel kapcsolható ki.
+A Qt input event pump alapból ki van kapcsolva (`FITPRO_QT_INPUT_PUMP_MS=0`),
+mert a beágyazott `processEvents()` hívások akadozást okozhatnak. Csak célzott
+touchscreen hibakereséshez érdemes például `50` értékkel bekapcsolni.
 
 Touch UX állapot:
 

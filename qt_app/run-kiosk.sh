@@ -13,7 +13,7 @@ export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
 # touch/click delivery pending until another input event, such as a key press,
 # wakes the event dispatcher. Force the legacy X11 mouse path for kiosk input.
 export QT_XCB_NO_XI2="${QT_XCB_NO_XI2:-1}"
-export FITPRO_QT_INPUT_PUMP_MS="${FITPRO_QT_INPUT_PUMP_MS:-50}"
+export FITPRO_QT_INPUT_PUMP_MS="${FITPRO_QT_INPUT_PUMP_MS:-0}"
 export FITPRO_API_BASE_URL="${FITPRO_API_BASE_URL:-http://127.0.0.1:8000/api}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 

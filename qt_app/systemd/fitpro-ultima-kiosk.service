@@ -10,7 +10,7 @@ WorkingDirectory=/opt/fitpro-ultima-laser/qt_app
 Environment=DISPLAY=:0
 Environment=QT_QPA_PLATFORM=xcb
 Environment=QT_XCB_NO_XI2=1
-Environment=FITPRO_QT_INPUT_PUMP_MS=50
+Environment=FITPRO_QT_INPUT_PUMP_MS=0
 Environment=FITPRO_API_BASE_URL=http://127.0.0.1:8000/api
 Environment=PYTHONUNBUFFERED=1
 Environment=FITPRO_QT_LOG_LEVEL=INFO

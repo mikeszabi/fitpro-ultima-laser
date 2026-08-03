@@ -129,6 +129,7 @@ def main() -> int:
     qml_dir = Path(__file__).resolve().parent / "qml"
     api = ApiClient(base_url=args.api_base_url) if args.api_base_url else ApiClient()
     controller = AppController(api)
+    app.aboutToQuit.connect(controller.stopStateSynchronization)
     LOG.info("Qt app using API base URL: %s", api.base_url)
 
     engine = QQmlApplicationEngine()
@@ -150,7 +151,9 @@ def main() -> int:
     heartbeat.start()
     LOG.info("Heartbeat logging enabled every %sms", heartbeat_ms)
 
-    input_pump_ms = int(os.environ.get("FITPRO_QT_INPUT_PUMP_MS", "50"))
+    # Qt already owns the event loop. The old nested 50 ms processEvents pump can
+    # introduce re-entrancy and input/render jitter, so it is opt-in for debugging.
+    input_pump_ms = int(os.environ.get("FITPRO_QT_INPUT_PUMP_MS", "0"))
     input_pump = install_input_event_pump(input_pump_ms)
 
     exit_code = app.exec()

@@ -539,6 +539,12 @@ Opens the hardware/software test screen.
 
 This screen is for service and diagnostics.
 
+At application startup, the UI waits only for the lightweight backend health
+endpoint and records the readiness/connection fields it returns. A modal progress
+message blocks touch and mouse actions until the backend responds. The expensive
+full HW/SW diagnostic and YOLO model-load check are not run automatically; use
+`Run full test` below when service diagnostics are needed.
+
 `Back`
 
 Returns to system info.

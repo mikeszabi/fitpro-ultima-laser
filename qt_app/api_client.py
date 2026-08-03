@@ -9,6 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any
 
 
@@ -317,6 +318,52 @@ class ApiClient:
 
     def treatment_app_status(self) -> Any:
         return self.get("/treatment/app/status", timeout=30.0)
+
+    def stream_state(
+        self,
+        stop_event: threading.Event,
+        on_state: Callable[[dict[str, Any]], None],
+        on_open: Callable[[], None] | None = None,
+    ) -> None:
+        """Read one SSE connection until it closes or shutdown is requested."""
+        last_error: Exception | None = None
+        for url in self._candidate_urls("/sse/state"):
+            request = urllib.request.Request(
+                url,
+                headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
+                method="GET",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=35.0) as response:
+                    self._remember_working_base(url)
+                    if on_open is not None:
+                        on_open()
+                    event_name = "message"
+                    data_lines: list[str] = []
+                    while not stop_event.is_set():
+                        raw_line = response.readline()
+                        if not raw_line:
+                            return
+                        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                        if not line:
+                            if event_name == "state" and data_lines:
+                                payload = json.loads("\n".join(data_lines))
+                                if isinstance(payload, dict):
+                                    on_state(payload)
+                            event_name = "message"
+                            data_lines = []
+                        elif line.startswith("event:"):
+                            event_name = line[6:].strip()
+                        elif line.startswith("data:"):
+                            data_lines.append(line[5:].lstrip())
+                    return
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code != 404:
+                    raise self._api_error_from_http(exc)
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raise self._api_error_from_exception(exc)
+        raise self._api_error_from_exception(last_error)
 
     def full_app_check(self, skip_model_load: bool = False) -> Any:
         return self.get(

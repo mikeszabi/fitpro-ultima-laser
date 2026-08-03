@@ -62,6 +62,7 @@ class AppController(QObject):
     screenChanged = Signal()
     apiStatusChanged = Signal()
     busyChanged = Signal()
+    startupCheckChanged = Signal()
     laserStateChanged = Signal()
     powerChanged = Signal()
     pulseWidthChanged = Signal()
@@ -77,6 +78,8 @@ class AppController(QObject):
     _taskFinished = Signal(str, object, object, bool, object)
     _taskFailed = Signal(str, str, bool, object)
     _streamLog = Signal(str)
+    _stateSnapshot = Signal(object)
+    _stateConnection = Signal(bool, str)
 
     def __init__(
         self,
@@ -92,26 +95,29 @@ class AppController(QObject):
         self._api_status = "Backend: checking"
         self._backend_ok = False
         self._busy = False
-        self._laser_ready = False
+        self._busy_label = ""
+        self._startup_backend_check_started = False
+        self._startup_check_in_progress = False
+        self._laser_ready: bool | None = None
         self._p808 = 20
         self._p980 = 25
         self._p1064 = 50
         self._pulse_width = 50
         self._red_dot = False
-        self._vacuum_enabled = False
-        self._vacuum_lock = False
+        self._vacuum_enabled: bool | None = None
+        self._vacuum_lock: bool | None = None
         self._target = False
         self._targeted_follicles = 0
-        self._loaded_target_count = 0
+        self._loaded_target_count = -1
         self._confidence_config = confidence_config or load_confidence_config()
         self._confidence = self._confidence_config.default
         self._treatment_mode = "semi-auto"
-        self._detection_enabled = False
-        self._overlay_enabled = False
+        self._detection_enabled: bool | None = None
+        self._overlay_enabled: bool | None = None
         self._app_state = "-"
         self._target_state = "-"
-        self._target_error_clear = True
-        self._app_state_running = False
+        self._target_error_clear: bool | None = None
+        self._app_state_running: bool | None = None
         self._laser_temp = "-"
         self._calibration_detection_enabled = False
         self._mask_overlay_enabled = False
@@ -157,6 +163,10 @@ class AppController(QObject):
         self._backend_camera_error = ""
         self._backend_sync_error = ""
         self._sync_backend_in_flight = False
+        self._state_revision = -1
+        self._state_connected = False
+        self._state_stream_stop = threading.Event()
+        self._state_stream_thread: threading.Thread | None = None
         self._treatment_stream_stop: threading.Event | None = None
         self._treatment_stream_thread: threading.Thread | None = None
         self._diagnostic_checks: list[dict[str, str]] = []
@@ -172,6 +182,8 @@ class AppController(QObject):
         self._taskFinished.connect(self._handle_task_finished)
         self._taskFailed.connect(self._handle_task_failed)
         self._streamLog.connect(self._append_log)
+        self._stateSnapshot.connect(self._apply_treatment_status)
+        self._stateConnection.connect(self._apply_state_connection)
 
     @Property(str, notify=screenChanged)
     def screen(self) -> str:
@@ -185,9 +197,21 @@ class AppController(QObject):
     def busy(self) -> bool:
         return self._busy
 
+    @Property(str, notify=busyChanged)
+    def busyLabel(self) -> str:
+        return self._busy_label
+
+    @Property(bool, notify=startupCheckChanged)
+    def startupCheckInProgress(self) -> bool:
+        return self._startup_check_in_progress
+
     @Property(bool, notify=laserStateChanged)
     def laserReady(self) -> bool:
-        return self._laser_ready
+        return self._laser_ready is True
+
+    @Property(str, notify=laserStateChanged)
+    def laserStateText(self) -> str:
+        return self._format_boolean_state(self._laser_ready, "ARMED", "DISARMED")
 
     @Property(int, notify=powerChanged)
     def p808(self) -> int:
@@ -227,11 +251,15 @@ class AppController(QObject):
 
     @Property(bool, notify=vacuumChanged)
     def vacuumEnabled(self) -> bool:
-        return self._vacuum_enabled
+        return self._vacuum_enabled is True
+
+    @Property(str, notify=vacuumChanged)
+    def vacuumStateText(self) -> str:
+        return self._format_boolean_state(self._vacuum_enabled, "ON", "OFF")
 
     @Property(bool, notify=vacuumChanged)
     def vacuumLock(self) -> bool:
-        return self._vacuum_lock
+        return self._vacuum_lock is True
 
     @Property(bool, notify=targetChanged)
     def target(self) -> bool:
@@ -271,11 +299,23 @@ class AppController(QObject):
 
     @Property(bool, notify=targetChanged)
     def detectionEnabled(self) -> bool:
-        return self._detection_enabled
+        return self._detection_enabled is True
+
+    @Property(str, notify=targetChanged)
+    def detectionStateText(self) -> str:
+        return self._format_boolean_state(self._detection_enabled, "ON", "OFF")
 
     @Property(bool, notify=targetChanged)
     def overlayEnabled(self) -> bool:
-        return self._overlay_enabled
+        return self._overlay_enabled is True
+
+    @Property(str, notify=targetChanged)
+    def overlayStateText(self) -> str:
+        return self._format_boolean_state(self._overlay_enabled, "ON", "OFF")
+
+    @Property(str, notify=targetChanged)
+    def loadedTargetText(self) -> str:
+        return str(self._loaded_target_count) if self._loaded_target_count >= 0 else "UNKNOWN"
 
     @Property(str, notify=targetChanged)
     def appState(self) -> str:
@@ -291,7 +331,22 @@ class AppController(QObject):
 
     @Property(bool, notify=targetChanged)
     def appStateRunning(self) -> bool:
-        return self._app_state_running
+        return self._app_state_running is True
+
+    @Property(bool, notify=targetChanged)
+    def stateConnected(self) -> bool:
+        return self._state_connected
+
+    @Property(bool, notify=targetChanged)
+    def hardwareStateKnown(self) -> bool:
+        return (
+            self._laser_ready is not None
+            and self._vacuum_enabled is not None
+            and self._app_state_running is not None
+            and self._target_error_clear is not None
+            and self._target_state != "-"
+            and self._loaded_target_count >= 0
+        )
 
     @Property(str, notify=targetChanged)
     def laserTemp(self) -> str:
@@ -407,7 +462,14 @@ class AppController(QObject):
 
     @Property(bool, notify=targetChanged)
     def treatmentModeReady(self) -> bool:
-        return self._backend_ok and self._is_ok_state(self._app_state) and self._is_ok_state(self._target_state)
+        return (
+            self._backend_ok
+            and self._state_connected
+            and self.hardwareStateKnown
+            and self._app_state_running is True
+            and self._is_ok_state(self._app_state)
+            and self._is_ok_state(self._target_state)
+        )
 
     @Property(bool, notify=targetChanged)
     def fireReady(self) -> bool:
@@ -467,10 +529,6 @@ class AppController(QObject):
             self.stopTreatmentCameraStream()
         self._screen = screen
         self.screenChanged.emit()
-        if screen == "laser-treatment":
-            self.syncBackend()
-        elif screen == "calibration":
-            self.initializeCalibrationPage()
 
     @Slot()
     def clearError(self) -> None:
@@ -538,10 +596,7 @@ class AppController(QObject):
         self._sync_backend_in_flight = True
 
         def task() -> dict[str, Any]:
-            health = self._api.health()
-            return {
-                "health": health,
-            }
+            return {"health": self._api.health(), "state": self._api.treatment_app_status()}
 
         self._run("Backend sync", task, self._apply_backend_state, busy=False)
 
@@ -619,28 +674,6 @@ class AppController(QObject):
 
         self._run("Disable calibration mode", task, self._apply_calibration_mode_disabled)
 
-    def _disable_treatment_entry_unsafe_states(self) -> None:
-        LOG.info("Treatment entry safety shutdown requested")
-        self._apply_unsafe_outputs_disabled()
-
-        commands: tuple[tuple[str, Callable[[], Any]], ...] = (
-            ("treatment detection off", lambda: self._api.set_detection_enabled(False)),
-            ("live overlay off", lambda: self._api.set_live_overlay_enabled(False)),
-            ("mask overlay off", lambda: self._api.set_mask_overlay_enabled(False)),
-            ("calibration detection off", lambda: self._api.set_calibration_detection_enabled(False)),
-            ("red dot off", lambda: self._api.set_red_dot(False)),
-            ("red dot enable off", lambda: self._api.set_red_dot_enabled(False)),
-            ("laser disarm", lambda: self._api.arm_laser(False)),
-            ("vacuum off", lambda: self._api.set_vacuum_enabled(False)),
-        )
-        for label, command in commands:
-            thread = threading.Thread(
-                target=self._fire_and_forget_safety_command,
-                args=(label, command),
-                daemon=True,
-            )
-            thread.start()
-
     @Slot(str, str, int, int)
     def setHsvChannel(self, range_name: str, bound_name: str, channel: int, value: int) -> None:
         LOG.info("HSV change range=%s bound=%s channel=%s value=%s", range_name, bound_name, channel, value)
@@ -657,7 +690,7 @@ class AppController(QObject):
     @Slot(bool)
     def setCalibrationLaserArm(self, enabled: bool) -> None:
         LOG.info("Calibration laser arm requested enabled=%s", enabled)
-        self._run("Laser arm" if enabled else "Laser disarm", lambda: self._api.arm_laser(enabled), lambda _: self._apply_laser_ready(enabled))
+        self._run("Laser arm" if enabled else "Laser disarm", lambda: self._api.arm_laser(enabled), lambda _: None)
 
     @Slot(bool)
     def setCalibrationRedDot(self, enabled: bool) -> None:
@@ -778,13 +811,33 @@ class AppController(QObject):
             self._apply_full_backend_check,
         )
 
+    @Slot()
+    def runStartupBackendCheck(self) -> None:
+        """Wait for backend health once per app start without running heavy diagnostics."""
+        if self._startup_backend_check_started:
+            return
+        self._startup_backend_check_started = True
+        self.startStateSynchronization()
+        self._set_startup_check_in_progress(True)
+        self._diagnostic_checks = []
+        self._diagnostic_summary = "Waiting for backend readiness..."
+        self._diagnostic_raw_output = ""
+        self._diagnostic_last_run = ""
+        self.diagnosticsChanged.emit()
+        self._run(
+            "Startup backend health check",
+            lambda: self._api.wait_until_ready(timeout=20.0),
+            self._apply_startup_health_check,
+            busy=False,
+        )
+
     @Slot(bool)
     def setLaserReady(self, enabled: bool) -> None:
-        def task() -> bool:
-            self._api.arm_laser(enabled)
-            return enabled
-
-        self._run("Laser arm" if enabled else "Laser disarm", task, self._apply_laser_ready)
+        self._run(
+            "Laser arm" if enabled else "Laser disarm",
+            lambda: self._api.arm_laser(enabled),
+            lambda _: None,
+        )
 
     @Slot(str, float)
     def setPower(self, channel: str, value: float) -> None:
@@ -818,7 +871,7 @@ class AppController(QObject):
         self._run(
             "Vacuum",
             lambda: self._api.set_vacuum_enabled(enabled),
-            lambda _: self._apply_vacuum_enabled(enabled),
+            lambda _: None,
         )
 
     @Slot(str)
@@ -827,14 +880,10 @@ class AppController(QObject):
             return
         api_mode = self._mode_to_api(mode)
 
-        def task() -> Any:
-            self._api.set_treatment_app_mode(api_mode)
-            return self._api.treatment_app_status()
-
         self._run(
             f"Mode {mode.upper()}",
-            task,
-            lambda result: self._apply_treatment_status(result, fallback_mode=mode),
+            lambda: self._api.set_treatment_app_mode(api_mode),
+            lambda _: None,
         )
 
     @Slot(float)
@@ -860,18 +909,11 @@ class AppController(QObject):
 
     @Slot()
     def applyLaserSettings(self) -> None:
-        self._run("Laser settings", self._apply_settings_task, self._apply_treatment_status)
+        self._run("Laser settings", self._apply_settings_task, lambda _: None)
 
     @Slot()
     def initializeTreatmentPage(self) -> None:
-        self._disable_treatment_entry_unsafe_states()
-
-        def task() -> Any:
-            self._api.startup_clean_state()
-            self._api.set_treatment_app_mode("semi_auto")
-            return self._api.treatment_app_status()
-
-        self._run("Treatment init", task, self._apply_treatment_entry_status)
+        self.startStateSynchronization()
 
     @Slot()
     def startTreatmentCameraStream(self) -> None:
@@ -889,30 +931,27 @@ class AppController(QObject):
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            data = self._api.treatment_app_detect()
-            return self._status_with_result(data)
+            return self._api.treatment_app_detect()
 
-        self._run("Detect targets", task, self._apply_treatment_status)
+        self._run("Detect targets", task, lambda _: None)
 
     @Slot()
     def fire(self) -> None:
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            data = self._api.treatment_app_fire()
-            return self._status_with_result(data)
+            return self._api.treatment_app_fire()
 
-        self._run("Fire", task, self._apply_treatment_status)
+        self._run("Fire", task, lambda _: None)
 
     @Slot()
     def nextTarget(self) -> None:
         def task() -> Any:
             if self._settings_dirty:
                 self._apply_settings_task()
-            data = self._api.treatment_app_next()
-            return self._status_with_result(data)
+            return self._api.treatment_app_next()
 
-        self._run("Next target", task, self._apply_treatment_status)
+        self._run("Next target", task, lambda _: None)
 
     @Slot()
     def stop(self) -> None:
@@ -922,23 +961,15 @@ class AppController(QObject):
             finally:
                 self._api.clear_app_error()
 
-        self._run("Stop sequence", task, lambda _: self.syncBackend())
+        self._run("Stop sequence", task, lambda _: None)
 
     @Slot()
     def emergencyStop(self) -> None:
-        def task() -> Any:
-            data = self._api.treatment_app_emergency_stop()
-            return self._status_with_result(data)
-
-        self._run("Emergency stop", task, self._apply_treatment_status)
+        self._run("Emergency stop", self._api.treatment_app_emergency_stop, lambda _: None)
 
     @Slot()
     def cleanupStates(self) -> None:
-        def task() -> Any:
-            self._api.startup_clean_state()
-            return self._api.treatment_app_status()
-
-        self._run("Cleanup states", task, self._apply_treatment_status)
+        self._run("Cleanup states", self._api.startup_clean_state, self._verify_cleanup_result)
 
     @Slot()
     def checkStates(self) -> None:
@@ -946,11 +977,13 @@ class AppController(QObject):
 
     @Slot()
     def toggleArm(self) -> None:
-        self.setLaserReady(not self._laser_ready)
+        if self._laser_ready is not None:
+            self.setLaserReady(not self._laser_ready)
 
     @Slot()
     def toggleVacuum(self) -> None:
-        self.setVacuumEnabled(not self._vacuum_enabled)
+        if self._vacuum_enabled is not None:
+            self.setVacuumEnabled(not self._vacuum_enabled)
 
     @Slot()
     def toggleDetection(self) -> None:
@@ -958,7 +991,7 @@ class AppController(QObject):
         self._run(
             "Detection on" if enabled else "Detection off",
             lambda: self._api.set_detection_enabled(enabled),
-            lambda _: self.checkStates(),
+            lambda _: None,
         )
 
     @Slot()
@@ -967,7 +1000,7 @@ class AppController(QObject):
         self._run(
             "Live overlay on" if enabled else "Live overlay off",
             lambda: self._api.set_live_overlay_enabled(enabled),
-            lambda _: self.checkStates(),
+            lambda _: None,
         )
 
     @Slot()
@@ -1008,30 +1041,11 @@ class AppController(QObject):
             self._pulse_width,
         )
         self._settings_dirty = False
-        return self._status_with_result(result)
+        return result
 
     def _run_full_backend_check_task(self, skip_model_load: bool) -> Any:
         self._api.wait_until_ready(timeout=20.0)
         return self._api.full_app_check(skip_model_load)
-
-    def _status_with_result(self, data: Any) -> dict[str, Any]:
-        status = self._api.treatment_app_status()
-        if isinstance(status, dict) and isinstance(data, dict):
-            status.update(data)
-        return status if isinstance(status, dict) else {}
-
-    def _fire_and_forget_safety_command(self, label: str, command: Callable[[], Any]) -> None:
-        started_at = time.monotonic()
-        LOG.info("safety command START %s", label)
-        try:
-            command()
-            duration_ms = (time.monotonic() - started_at) * 1000
-            LOG.info("safety command OK %s %.0fms", label, duration_ms)
-            if duration_ms >= 3000:
-                LOG.warning("safety command SLOW %s %.0fms", label, duration_ms)
-        except Exception as exc:
-            duration_ms = (time.monotonic() - started_at) * 1000
-            LOG.warning("safety command FAIL %s %.0fms: %s", label, duration_ms, exc)
 
     def _run(
         self,
@@ -1057,7 +1071,7 @@ class AppController(QObject):
             len(self._workers),
         )
         if busy:
-            self._set_busy(True)
+            self._set_busy(True, label)
         if not quiet:
             self._set_status(f"{label}...")
         worker = ApiWorker(label, task, quiet=quiet)
@@ -1106,13 +1120,15 @@ class AppController(QObject):
         LOG.debug("task callback start label=%s worker=%s", label, getattr(worker, "worker_id", "?"))
         on_success(result)
         LOG.debug("task callback applied label=%s worker=%s", label, getattr(worker, "worker_id", "?"))
-        if label == "Backend sync":
+        if label in {"Backend sync", "Startup backend health check"}:
             self._sync_backend_in_flight = False
             self._backend_sync_error = ""
             backend_changed = not self._backend_ok
             self._backend_ok = True
             if backend_changed:
                 self.targetChanged.emit()
+        if label == "Startup backend health check":
+            self._set_startup_check_in_progress(False)
         quiet = label in {"Backend sync", "Calibration telemetry"}
         if not quiet:
             self._set_status(f"{label}: OK")
@@ -1154,14 +1170,20 @@ class AppController(QObject):
             self._diagnostic_raw_output = message
             self._diagnostic_last_run = time.strftime("%H:%M:%S")
             self.diagnosticsChanged.emit()
+        elif label == "Startup backend health check":
+            self._diagnostic_summary = f"Backend health check failed | {message}"
+            self._diagnostic_raw_output = message
+            self._diagnostic_last_run = time.strftime("%H:%M:%S")
+            self._set_startup_check_in_progress(False)
+            self.diagnosticsChanged.emit()
         self._error_title = label
         self._error_message = message
         self.errorChanged.emit()
         self._release_worker(worker)
         if busy:
             self._set_busy(False)
-        if label in {"Detect targets", "Fire", "Next target", "Cleanup states", "Emergency stop"}:
-            self.checkStates()
+        # Keep the last verified snapshot on command failure. If the backend did
+        # mutate state before failing, the state stream will still report it.
 
     def _release_worker(self, worker: object) -> None:
         try:
@@ -1227,11 +1249,21 @@ class AppController(QObject):
         self._api_status = status
         self.apiStatusChanged.emit()
 
-    def _set_busy(self, busy: bool) -> None:
+    def _set_busy(self, busy: bool, label: str = "") -> None:
         self._busy = busy
+        self._busy_label = label if busy else ""
         self.busyChanged.emit()
 
+    def _set_startup_check_in_progress(self, in_progress: bool) -> None:
+        if self._startup_check_in_progress == in_progress:
+            return
+        self._startup_check_in_progress = in_progress
+        self.startupCheckChanged.emit()
+
     def _apply_backend_state(self, data: dict[str, Any]) -> None:
+        state = data.get("state")
+        if isinstance(state, dict):
+            self._apply_treatment_status(state)
         health = data.get("health", {})
         if isinstance(health, dict):
             camera_ready = bool(health.get("camera_ready", False))
@@ -1241,6 +1273,91 @@ class AppController(QObject):
             elif camera_error and camera_error != self._backend_camera_error:
                 self._backend_camera_error = str(camera_error)
                 self._append_log(f"Camera: {camera_error}")
+
+    def _apply_startup_health_check(self, health: Any) -> None:
+        health = health if isinstance(health, dict) else {}
+        self._apply_backend_state({"health": health})
+
+        checks: list[dict[str, str]] = [
+            {"status": "OK", "name": "Backend API", "message": "Health endpoint reachable"}
+        ]
+        readiness_suffixes = ("_ready", "_connected", "_available", "_ok")
+
+        def collect(prefix: str, value: Any) -> None:
+            if not isinstance(value, dict):
+                return
+            for key, item in value.items():
+                name = f"{prefix}.{key}" if prefix else str(key)
+                if isinstance(item, dict):
+                    collect(name, item)
+                elif isinstance(item, bool) and str(key).lower().endswith(readiness_suffixes):
+                    checks.append(
+                        {
+                            "status": "OK" if item else "FAIL",
+                            "name": name.replace("_", " "),
+                            "message": "Ready" if item else "Not ready",
+                        }
+                    )
+
+        collect("", health)
+        fail_count = sum(1 for check in checks if check["status"] == "FAIL")
+        self._diagnostic_checks = checks
+        self._diagnostic_summary = (
+            f"Backend ready | {len(checks) - fail_count} checks OK"
+            if fail_count == 0
+            else f"Backend reachable | {fail_count} device/readiness checks failed"
+        )
+        self._diagnostic_raw_output = ""
+        self._diagnostic_last_run = time.strftime("%H:%M:%S")
+        self.diagnosticsChanged.emit()
+        self.startStateSynchronization()
+
+    @Slot()
+    def startStateSynchronization(self) -> None:
+        if self._state_stream_thread is not None and self._state_stream_thread.is_alive():
+            return
+        self._state_stream_stop.clear()
+
+        def run() -> None:
+            while not self._state_stream_stop.is_set():
+                try:
+                    initial = self._api.treatment_app_status()
+                    if isinstance(initial, dict):
+                        self._stateSnapshot.emit(initial)
+                    self._api.stream_state(
+                        self._state_stream_stop,
+                        self._stateSnapshot.emit,
+                        lambda: self._stateConnection.emit(True, ""),
+                    )
+                    if not self._state_stream_stop.is_set():
+                        raise RuntimeError("State stream closed")
+                except Exception as exc:
+                    if self._state_stream_stop.is_set():
+                        return
+                    self._stateConnection.emit(False, str(exc))
+                    self._state_stream_stop.wait(2.0)
+
+        self._state_stream_thread = threading.Thread(
+            target=run, name="backend-state-sse", daemon=True
+        )
+        self._state_stream_thread.start()
+
+    @Slot()
+    def stopStateSynchronization(self) -> None:
+        self._state_stream_stop.set()
+
+    @Slot(bool, str)
+    def _apply_state_connection(self, connected: bool, message: str) -> None:
+        changed = self._state_connected != connected
+        self._state_connected = connected
+        if connected:
+            self._backend_ok = True
+            self._backend_sync_error = ""
+        elif message != self._backend_sync_error:
+            self._backend_sync_error = message
+            self._set_status(f"State updates disconnected: {message}")
+        if changed:
+            self.targetChanged.emit()
 
     def _apply_laser_ready(self, enabled: bool) -> None:
         self._laser_ready = enabled
@@ -1545,9 +1662,23 @@ class AppController(QObject):
         self.pulseWidthChanged.emit()
         self.targetChanged.emit()
 
+    def _verify_cleanup_result(self, data: Any) -> None:
+        if not isinstance(data, dict) or data.get("ok") is not True:
+            details = data.get("responses") if isinstance(data, dict) else data
+            self._error_title = "Cleanup verification failed"
+            self._error_message = f"Backend could not verify a safe reset. Details: {details}"
+            self.errorChanged.emit()
+
     def _apply_treatment_status(self, data: Any, fallback_mode: str | None = None) -> None:
         if not isinstance(data, dict):
-            data = {}
+            return
+
+        revision = data.get("revision")
+        if isinstance(revision, int):
+            if revision < self._state_revision:
+                LOG.debug("Ignoring stale state revision=%s current=%s", revision, self._state_revision)
+                return
+            self._state_revision = revision
 
         mode = data.get("mode")
         if mode:
@@ -1555,20 +1686,27 @@ class AppController(QObject):
         elif fallback_mode:
             self._treatment_mode = fallback_mode
 
-        self._laser_ready = bool(data.get("laser_armed", self._laser_ready))
+        if "laser_armed" in data:
+            self._laser_ready = self._nullable_bool(data.get("laser_armed"))
         vacuum = data.get("vacuum", {})
         if isinstance(vacuum, dict):
-            self._vacuum_enabled = bool(vacuum.get("vacuum_on", self._vacuum_enabled))
-        self._detection_enabled = bool(data.get("detection_enabled", self._detection_enabled))
-        self._overlay_enabled = bool(
-            data.get("hair_detection_overlay_enabled", self._overlay_enabled)
-        )
-        self._target_error_clear = bool(data.get("target_error_clear", self._target_error_clear))
-        self._app_state_running = bool(data.get("app_state_running", self._app_state_running))
+            if "vacuum_on" in vacuum:
+                self._vacuum_enabled = self._nullable_bool(vacuum.get("vacuum_on"))
+            if "check_vacuum_enabled" in vacuum:
+                self._vacuum_lock = self._nullable_bool(vacuum.get("check_vacuum_enabled"))
+        if "detection_enabled" in data:
+            self._detection_enabled = self._nullable_bool(data.get("detection_enabled"))
+        if "hair_detection_overlay_enabled" in data:
+            self._overlay_enabled = self._nullable_bool(data.get("hair_detection_overlay_enabled"))
+        if "target_error_clear" in data:
+            self._target_error_clear = self._nullable_bool(data.get("target_error_clear"))
+        if "app_state_running" in data:
+            self._app_state_running = self._nullable_bool(data.get("app_state_running"))
         self._app_state = self._extract_payload(data.get("app_state", data.get("status", self._app_state)))
         self._target_state = self._extract_payload(data.get("target_state", self._target_state))
 
-        target_count = int(data.get("loaded_targets", data.get("targets_count", self._loaded_target_count)) or 0)
+        target_value = data.get("loaded_targets", data.get("targets_count", self._loaded_target_count))
+        target_count = -1 if target_value is None else int(target_value)
         if "manual_remaining" in data and self._treatment_mode == "manual":
             target_count = int(data.get("manual_remaining") or 0)
         self._target = target_count > 0
@@ -1606,6 +1744,18 @@ class AppController(QObject):
         self.powerChanged.emit()
         self.pulseWidthChanged.emit()
         self.targetChanged.emit()
+
+    @staticmethod
+    def _nullable_bool(value: Any) -> bool | None:
+        return value if isinstance(value, bool) else None
+
+    @staticmethod
+    def _format_boolean_state(value: bool | None, on_label: str, off_label: str) -> str:
+        if value is True:
+            return on_label
+        if value is False:
+            return off_label
+        return "UNKNOWN"
 
     def _append_log(self, message: str) -> None:
         stamp = time.strftime("%H:%M:%S")
